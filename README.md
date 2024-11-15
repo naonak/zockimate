@@ -1,6 +1,6 @@
 # Zockimate
 
-A Docker container manager with versioning capabilities, automated updates, and rollback features.
+A Docker container manager with versioning capabilities, automated updates, and rollback features. This project is designed and optimized to work on TrueNAS Scale, taking advantage of its native ZFS integration and container management capabilities.
 
 ## Features
 - Automated container updates with safety rollback
@@ -8,6 +8,10 @@ A Docker container manager with versioning capabilities, automated updates, and 
 - Scheduled updates and checks
 - Detailed update history
 - Apprise notifications support
+
+## Prerequisites
+- **Docker**: Make sure Docker is installed and running on your system.
+- **ZFS**: If using ZFS for dataset management, ensure ZFS is configured and operational.
 
 ## Usage
 
