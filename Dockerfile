@@ -1,5 +1,8 @@
 # Build stage
-FROM golang:1.23-bookworm AS builder
+FROM --platform=$BUILDPLATFORM golang:1.23-bookworm AS builder
+
+ARG TARGETARCH
+ARG TARGETOS
 
 WORKDIR /app
 
@@ -25,11 +28,11 @@ RUN go mod tidy && go mod download
 COPY . .
 
 # Build avec les optimisations
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+RUN CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags="-w -s" -o /usr/local/bin/zockimate ./cmd/zockimate
 
 # Final stage
-FROM debian:bookworm-slim
+FROM --platform=$TARGETPLATFORM debian:bookworm-slim
 
 RUN mkdir -p /var/lib/zockimate
 
