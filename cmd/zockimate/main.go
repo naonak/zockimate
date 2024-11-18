@@ -17,8 +17,8 @@ import (
     "zockimate/internal/config"
     "zockimate/internal/manager"
     "zockimate/internal/scheduler"
-    "zockimate/internal/types"
     "github.com/sirupsen/logrus"
+    "zockimate/internal/types/options"
 )
 
 func main() {
@@ -83,11 +83,7 @@ Environment variables:
 
 // newUpdateCmd crée la commande update
 func newUpdateCmd(cfg *config.Config) *cobra.Command {
-    var opts = types.UpdateOptions{
-        Timeout:   types.DefaultUpdateTimeout,
-        Force: false,
-        DryRun: false,
-    }
+    var opts = options.NewUpdateOptions()
 
     cmd := &cobra.Command{
         Use:   "update [container...]",
@@ -162,11 +158,7 @@ Examples:
 // newCheckCmd crée la commande check
 func newCheckCmd(cfg *config.Config) *cobra.Command {
 
-    var opts = types.CheckOptions{
-        Timeout:   types.DefaultCheckTimeout,
-        Force: false,
-        Cleanup: true,
-    }
+    var opts = options.NewCheckOptions()
 
     cmd := &cobra.Command{
         Use:   "check [container...]",
@@ -241,12 +233,12 @@ Examples:
 // newRollbackCmd crée la commande rollback
 func newRollbackCmd(cfg *config.Config) *cobra.Command {
 
-    var opts = types.RollbackOptions{
+    var opts = options.RollbackOptions{
         Image:     false,
         Data:      false,
         Config:    false,
         Force:     false,
-        Timeout:   types.DefaultRollbackTimeout,
+        Timeout:   options.DefaultRollbackTimeout,
     }
 
     cmd := &cobra.Command{
@@ -332,7 +324,7 @@ Examples:
             }
             defer m.Close()
 
-            opts := types.HistoryOptions{
+            opts := options.HistoryOptions{
                 Container: args,
                 Limit:    cfg.Limit,
                 Last:     cfg.Last,
@@ -441,12 +433,7 @@ Cron Expression Format:
 
 // newScheduleUpdateCmd crée la sous-commande schedule update
 func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
-    var opts = types.UpdateOptions{
-        Timeout:   types.DefaultUpdateTimeout,
-        ContainerReadyTimeout: types.DefaultContainerReadyTimeout,
-        Force: false,
-        DryRun: false,
-    }
+    var opts = options.NewUpdateOptions()
 
     cmd := &cobra.Command{
         Use:   `update "cron-expression" [container...]`,
@@ -465,6 +452,7 @@ func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
             s := scheduler.NewScheduler(m, scheduler.Options{
                 Containers: containers,
                 CheckOnly:  false,
+                UpdateOpts: opts,
                 Logger:    cfg.Logger,
             })
 
@@ -493,11 +481,7 @@ func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
 
 // newScheduleCheckCmd crée la sous-commande schedule check
 func newScheduleCheckCmd(cfg *config.Config) *cobra.Command {
-    var opts = types.CheckOptions{
-        Timeout:   types.DefaultCheckTimeout,
-        Force: false,
-        Cleanup: true,
-    }
+    var opts = options.NewCheckOptions()
 
     cmd := &cobra.Command{
         Use:   `check "cron-expression" [container...]`,
@@ -516,6 +500,7 @@ func newScheduleCheckCmd(cfg *config.Config) *cobra.Command {
             s := scheduler.NewScheduler(m, scheduler.Options{
                 Containers: containers,
                 CheckOnly:  true,
+                CheckOpts: opts,
                 Logger:    cfg.Logger,
             })
 
@@ -580,11 +565,11 @@ Each snapshot includes:
             var failed bool
             
             for _, name := range args {
-                opts := types.NewSnapshotOptions(
-                    types.WithMessage(message),
-                    types.WithDryRun(dryRun),
-                    types.WithForce(force),
-                    types.WithNoCleanup(noCleanup),
+                opts := options.NewSnapshotOptions(
+                    options.WithSnapshotMessage(message),
+                    options.WithSnapshotDryRun(dryRun),
+                    options.WithSnapshotForce(force),
+                    options.WithSnapshotNoCleanup(noCleanup),
                 )
                 
                 if dryRun {

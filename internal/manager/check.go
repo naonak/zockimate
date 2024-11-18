@@ -7,10 +7,11 @@ import (
 
     "zockimate/pkg/utils"
     "zockimate/internal/types"
+    "zockimate/internal/types/options"
 )
 
 // CheckContainer vérifie si une mise à jour est disponible pour un conteneur
-func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opts types.CheckOptions) (types.CheckResult, error) {
+func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opts options.CheckOptions) (types.CheckResult, error) {
 
     cm.lock.Lock()
     defer cm.lock.Unlock()

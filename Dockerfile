@@ -32,7 +32,7 @@ RUN CGO_ENABLED=1 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags="-w -s" -o /usr/local/bin/zockimate ./cmd/zockimate
 
 # Final stage
-FROM --platform=$TARGETPLATFORM debian:bookworm-slim
+FROM debian:bookworm-slim
 
 RUN mkdir -p /var/lib/zockimate
 

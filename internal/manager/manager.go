@@ -14,6 +14,7 @@ import (
     "zockimate/internal/storage/zfs"
     "zockimate/internal/notify"
     "zockimate/internal/types"
+    "zockimate/internal/types/options"
     "github.com/sirupsen/logrus"
 )
 
@@ -96,14 +97,14 @@ func (cm *ContainerManager) notifyf(title, format string, args ...interface{}) {
 }
 
 // GetHistory récupère l'historique des snapshots
-func (cm *ContainerManager) GetHistory(opts types.HistoryOptions) ([]types.SnapshotMetadata, error) {
+func (cm *ContainerManager) GetHistory(opts options.HistoryOptions) ([]types.SnapshotMetadata, error) {
     cm.lock.RLock()
     defer cm.lock.RUnlock()
 
     return cm.db.GetHistory(opts)
 }
 
-func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opts types.SnapshotOptions) (*types.ContainerSnapshot, error) {
+func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opts options.SnapshotOptions) (*types.ContainerSnapshot, error) {
     cm.lock.Lock()
     defer cm.lock.Unlock()
 

@@ -11,11 +11,11 @@ import (
     "github.com/docker/docker/api/types/network"
 
     "zockimate/pkg/utils"
-    "zockimate/internal/types"
+    "zockimate/internal/types/options"
 )
 
 // UpdateContainer met à jour un conteneur
-func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, opts types.UpdateOptions) error {
+func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, opts options.UpdateOptions) error {
 
     name = utils.CleanContainerName(name)
     cm.logger.Infof("Starting update process for container: %s", name)
@@ -28,11 +28,7 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     cm.logger.Infof("CheckContainer for container: %s", name)
 
     // Vérifier les mises à jour disponibles
-    checkResult, err := cm.CheckContainer(ctx, name, types.CheckOptions{
-        Force: opts.Force,
-        Timeout:   types.DefaultCheckTimeout,
-        Cleanup: false,
-    })
+    checkResult, err := cm.CheckContainer(ctx, name, options.NewCheckOptions(options.WithCheckCleanup(false)))
 
     cm.logger.Infof("CheckContainer ok for container: %s", name)
 
@@ -48,11 +44,11 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     cm.logger.Infof("Create snapshot for container: %s", name)
 
     // Créer un snapshot de sécurité avant le rollback
-    safetySnapshot, err := cm.CreateSnapshot(ctx, name, types.NewSnapshotOptions(
-        types.WithMessage("Pre-update snapshot"),
-        types.WithDryRun(false),
-        types.WithForce(false),
-        types.WithNoCleanup(true),
+    safetySnapshot, err := cm.CreateSnapshot(ctx, name, options.NewSnapshotOptions(
+        options.WithSnapshotMessage("Pre-update snapshot"),
+        options.WithSnapshotDryRun(false),
+        options.WithSnapshotForce(false),
+        options.WithSnapshotNoCleanup(true),
     ))
 
     if err != nil {
@@ -120,7 +116,7 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
         
         cm.lock.Unlock()
 
-        if rollbackErr := cm.RollbackContainer(ctx, name, types.RollbackOptions{
+        if rollbackErr := cm.RollbackContainer(ctx, name, options.RollbackOptions{
             SnapshotID: safetySnapshot.ID,
             Image:     true,
             Data:      true,

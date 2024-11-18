@@ -13,6 +13,7 @@ import (
 
     "zockimate/internal/storage/zfs"
     "zockimate/internal/types"
+    "zockimate/internal/types/options"
     "zockimate/pkg/utils"
 )
 
@@ -170,7 +171,7 @@ func (d *Database) GetSnapshot(containerName string, id int64) (*types.Container
 }
 
 // GetHistory récupère l'historique des snapshots
-func (d *Database) GetHistory(opts types.HistoryOptions) ([]types.SnapshotMetadata, error) {
+func (d *Database) GetHistory(opts options.HistoryOptions) ([]types.SnapshotMetadata, error) {
     var conditions []string
     var args []interface{}
     

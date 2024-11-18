@@ -14,7 +14,7 @@ import (
     "github.com/sirupsen/logrus"
 
     "zockimate/internal/manager"
-    "zockimate/internal/types"
+    "zockimate/internal/types/options"
 )
 
 // Scheduler gère les opérations programmées sur les conteneurs
@@ -22,7 +22,9 @@ type Scheduler struct {
     manager    *manager.ContainerManager
     cron       *cron.Cron
     containers []string
-    checkOnly  bool
+    checkOpts  options.CheckOptions
+    updateOpts  options.UpdateOptions
+    checkOnly  bool              
     logger     *logrus.Logger
     stopChan   chan struct{}
     wg         sync.WaitGroup
@@ -31,7 +33,9 @@ type Scheduler struct {
 // Options pour la configuration du scheduler
 type Options struct {
     Containers []string
-    CheckOnly  bool
+    CheckOpts  options.CheckOptions
+    UpdateOpts options.UpdateOptions
+    CheckOnly  bool 
     Logger     *logrus.Logger
 }
 
@@ -48,6 +52,8 @@ func NewScheduler(m *manager.ContainerManager, opts Options) *Scheduler {
             cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow,
         ))),
         containers: opts.Containers,
+        checkOpts:  opts.CheckOpts,
+        updateOpts: opts.UpdateOpts,
         checkOnly:  opts.CheckOnly,
         logger:     opts.Logger,
         stopChan:   make(chan struct{}),
@@ -109,52 +115,48 @@ func (s *Scheduler) runScheduledTask() {
     }
 
     if s.checkOnly {
-        s.performScheduledCheck(ctx, containers)
+        s.performScheduledCheck(ctx, containers, s.checkOpts)
     } else {
-        s.performScheduledUpdate(ctx, containers)
+        s.performScheduledUpdate(ctx, containers, s.updateOpts)
     }
 }
 
 // performScheduledCheck vérifie les mises à jour disponibles
-func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []string) {
+func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []string, opts options.CheckOptions) {
     var updates []string
 
     for _, name := range containers {
-        result, err := s.manager.CheckContainer(ctx, name, types.CheckOptions{
-            Cleanup: true,
-        })
-
+        result, err := s.manager.CheckContainer(ctx, name, opts)
         if err != nil {
             s.logger.Errorf("Failed to check container %s: %v", name, err)
             continue
         }
 
         if result.NeedsUpdate {
-            updates = append(updates, fmt.Sprintf("%s: %s -> %s",
+            updates = append(updates, fmt.Sprintf(
+                "%s:  Current: %s  Latest:  %s",
                 name,
                 result.CurrentImage.String(),
                 result.UpdateImage.String(),
             ))
         }
     }
-
+    
     if len(updates) > 0 {
-        s.logger.Infof("Updates available:\n%s", updates)
+        for _, update := range updates {
+            s.logger.Info(update)
+        }
     } else {
         s.logger.Info("All containers are up to date")
     }
 }
 
 // performScheduledUpdate met à jour les conteneurs
-func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []string) {
+func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []string, opts options.UpdateOptions) {
     var succeeded, failed []string
 
     for _, name := range containers {
-        err := s.manager.UpdateContainer(ctx, name, types.UpdateOptions{
-            Timeout: 5*time.Minute,
-            Force: false,
-            DryRun: false,
-        })
+        err := s.manager.UpdateContainer(ctx, name, opts)
 
         if err != nil {
             s.logger.Errorf("Failed to update container %s: %v", name, err)

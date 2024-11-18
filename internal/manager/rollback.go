@@ -8,11 +8,11 @@ import (
     "github.com/docker/docker/api/types/container"
     "github.com/docker/docker/api/types/network"
 
-    "zockimate/internal/types"
+    "zockimate/internal/types/options"
     "zockimate/pkg/utils"
 )
 
-func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, opts types.RollbackOptions) error {
+func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, opts options.RollbackOptions) error {
 
     name = utils.CleanContainerName(name)
     cm.logger.Infof("Rolling back container %s to snapshot %d", name, opts.SnapshotID)
@@ -24,11 +24,11 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
     }
 
     // Créer un snapshot de sécurité avant le rollback
-    safetySnapshot, err := cm.CreateSnapshot(ctx, name, types.NewSnapshotOptions(
-        types.WithMessage(fmt.Sprintf("Auto-save before rollback to snapshot %d", snapshot.ID)),
-        types.WithDryRun(false),
-        types.WithForce(false),
-        types.WithNoCleanup(true),
+    safetySnapshot, err := cm.CreateSnapshot(ctx, name, options.NewSnapshotOptions(
+        options.WithSnapshotMessage(fmt.Sprintf("Auto-save before rollback to snapshot %d", snapshot.ID)),
+        options.WithSnapshotDryRun(false),
+        options.WithSnapshotForce(false),
+        options.WithSnapshotNoCleanup(true),
     ))
 
     if err != nil {
@@ -43,7 +43,7 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
         if rollbackErr != nil {
             cm.logger.Error("Rollback failed, attempting to restore from safety snapshot")
             cm.lock.Unlock()
-            if err := cm.RollbackContainer(ctx, name, types.RollbackOptions{
+            if err := cm.RollbackContainer(ctx, name, options.RollbackOptions{
                 SnapshotID: safetySnapshot.ID,
                 Image:     true,
                 Data:      true,
