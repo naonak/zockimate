@@ -9,6 +9,7 @@ import (
 
     "github.com/docker/docker/api/types/container"
     "github.com/docker/docker/api/types/network"
+    "github.com/docker/docker/client"
 
     "zockimate/pkg/utils"
     "zockimate/internal/types/options"
@@ -23,6 +24,25 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     if opts.DryRun {
         cm.logger.Infof("Dry run: would update container %s", name)
         return nil
+    }
+
+    // Inspecter le conteneur
+    ctn, err := cm.docker.InspectContainer(ctx, name)
+    if err != nil {
+        if client.IsErrNotFound(err) {
+            return fmt.Errorf("container does not exist: %w", err)
+        }
+        return fmt.Errorf("failed to inspect container: %w", err)
+    }
+
+    // Vérifier si le conteneur doit être géré
+    if !cm.config.NoFilter && !utils.IsContainerEnabled(ctn.Config.Labels) {
+        return fmt.Errorf("container not enabled for management")
+    }
+
+    // Vérifier si le conteneur doit être en cours d'exécution
+    if !cm.config.All && !ctn.State.Running {
+        return fmt.Errorf("container not running (use --all to include stopped containers)")
     }
 
     cm.logger.Infof("CheckContainer for container: %s", name)
@@ -57,12 +77,6 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
 
     cm.lock.Lock()
     defer cm.lock.Unlock()
-
-    // Inspecter le conteneur actuel
-    ctn, err := cm.docker.InspectContainer(ctx, name)
-    if err != nil {
-        return fmt.Errorf("failed to inspect container: %w", err)
-    }
 
     // Récupérer la configuration actuelle
     containerConfig, hostConfig, networkConfig, err := cm.docker.GetContainerConfigs(ctn)

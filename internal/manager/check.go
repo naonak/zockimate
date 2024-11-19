@@ -8,6 +8,7 @@ import (
     "zockimate/pkg/utils"
     "zockimate/internal/types"
     "zockimate/internal/types/options"
+    "github.com/docker/docker/client"
 )
 
 // CheckContainer vérifie si une mise à jour est disponible pour un conteneur
@@ -23,6 +24,9 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
     // Inspecter le conteneur
     ctn, err := cm.docker.InspectContainer(ctx, name)
     if err != nil {
+        if client.IsErrNotFound(err) {
+            return result, fmt.Errorf("container does not exist: %w", err)
+        }
         return result, fmt.Errorf("failed to inspect container: %w", err)
     }
 

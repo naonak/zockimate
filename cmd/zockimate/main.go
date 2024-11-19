@@ -73,6 +73,7 @@ Environment variables:
         newHistoryCmd(cfg),
         newScheduleCmd(cfg),
         newSaveCmd(cfg),
+        newRenameCmd(cfg),
     )
 
     // Exécuter la commande
@@ -599,6 +600,38 @@ Each snapshot includes:
     cmd.Flags().BoolP("force", "f", false, "Force snapshot even if container is stopped")
     cmd.Flags().Bool("no-cleanup", false, "Skip cleanup of old snapshots")
     
+    return cmd
+}
+
+func newRenameCmd(cfg *config.Config) *cobra.Command {
+    var opts options.RenameOptions
+
+    cmd := &cobra.Command{
+        Use:   "rename old-name new-name",
+        Short: "Rename a container",
+        Long: `Rename a container in both Docker (if it exists) and the database.
+If the container exists in Docker, it will be renamed there and in the database.
+If it only exists in the database, only the database entries will be updated.
+
+Examples:
+  # Rename a container everywhere
+  zockimate rename old-container new-container
+
+  # Rename only in database
+  zockimate rename --db-only old-container new-container`,
+        Args: cobra.ExactArgs(2),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            m, err := manager.NewContainerManager(cfg)
+            if err != nil {
+                return err
+            }
+            defer m.Close()
+
+            return m.RenameContainer(context.Background(), args[0], args[1], opts)
+        },
+    }
+
+    cmd.Flags().BoolVar(&opts.DbOnly, "db-only", false, "Only rename in database, ignore Docker")
     return cmd
 }
 

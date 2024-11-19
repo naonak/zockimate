@@ -7,6 +7,7 @@ import (
 
     "github.com/docker/docker/api/types/container"
     "github.com/docker/docker/api/types/network"
+    "github.com/docker/docker/client"
 
     "zockimate/internal/types/options"
     "zockimate/pkg/utils"
@@ -16,6 +17,20 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
 
     name = utils.CleanContainerName(name)
     cm.logger.Infof("Rolling back container %s to snapshot %d", name, opts.SnapshotID)
+
+    // Inspecter le conteneur
+    ctn, err := cm.docker.InspectContainer(ctx, name)
+    if err != nil {
+        if client.IsErrNotFound(err) {
+            return fmt.Errorf("container does not exist: %w", err)
+        }
+        return fmt.Errorf("failed to inspect container: %w", err)
+    }
+
+    // Vérifier si le conteneur doit être géré
+    if !cm.config.NoFilter && !utils.IsContainerEnabled(ctn.Config.Labels) {
+        return fmt.Errorf("container not enabled for management")
+    }
 
     // Récupérer le snapshot
     snapshot, err := cm.db.GetSnapshot(name, opts.SnapshotID)

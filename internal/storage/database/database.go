@@ -314,3 +314,24 @@ func (d *Database) CleanupSnapshots(containerName string, retain int) error {
 
     return nil
 }
+
+func (d *Database) RenameContainer(oldName, newName string) (int64, error) {
+    // Check if new name exists
+    var count int
+    err := d.db.QueryRow("SELECT COUNT(*) FROM container_snapshots WHERE container_name = ?", newName).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to check for existing name: %w", err)
+    }
+    if count > 0 {
+        return 0, fmt.Errorf("container with name %s already exists in database", newName)
+    }
+
+    // Perform rename
+    result, err := d.db.Exec("UPDATE container_snapshots SET container_name = ? WHERE container_name = ?", 
+        newName, oldName)
+    if err != nil {
+        return 0, fmt.Errorf("failed to update container name: %w", err)
+    }
+
+    return result.RowsAffected()
+}

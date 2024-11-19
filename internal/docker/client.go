@@ -235,3 +235,26 @@ func (c *Client) RemoveImage(ctx context.Context, imageID string) error {
     }
     return nil
 }
+
+func (c *Client) ContainerRename(ctx context.Context, oldName, newName string) error {
+    c.logger.Debugf("Renaming container from %s to %s", oldName, newName)
+    
+    // Check if oldName container exists
+    if _, err := c.cli.ContainerInspect(ctx, oldName); err != nil {
+        return fmt.Errorf("source container %s does not exist: %w", oldName, err)
+    }
+    
+    // Check if target name already exists
+    if _, err := c.cli.ContainerInspect(ctx, newName); err == nil {
+        return fmt.Errorf("target name %s already exists", newName)
+    } else if !client.IsErrNotFound(err) {
+        return fmt.Errorf("error checking target container: %w", err)
+    }
+    
+    if err := c.cli.ContainerRename(ctx, oldName, newName); err != nil {
+        return fmt.Errorf("docker rename failed: %w", err) 
+    }
+
+    c.logger.Debugf("Successfully renamed container from %s to %s", oldName, newName)
+    return nil
+}
