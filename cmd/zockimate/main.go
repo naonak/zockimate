@@ -74,6 +74,7 @@ Environment variables:
         newScheduleCmd(cfg),
         newSaveCmd(cfg),
         newRenameCmd(cfg),
+        newRemoveCmd(cfg),
     )
 
     // Exécuter la commande
@@ -632,6 +633,73 @@ Examples:
     }
 
     cmd.Flags().BoolVar(&opts.DbOnly, "db-only", false, "Only rename in database, ignore Docker")
+    return cmd
+}
+
+func newRemoveCmd(cfg *config.Config) *cobra.Command {
+    var opts options.RemoveOptions
+    var olderThan string
+    var before string
+
+    cmd := &cobra.Command{
+        Use:   "remove [flags] container [container...]",
+        Short: "Remove container entries from database",
+        Long: `Remove container entries from the database and optionally remove the Docker container.
+
+By default, refuses to remove entries if container still exists in Docker.
+Use --force to remove entries anyway or --with-container to also remove the Docker container.
+
+Can also clean up old entries based on age or date.`,
+        Args: cobra.MinimumNArgs(1),
+        RunE: func(cmd *cobra.Command, args []string) error {
+            // Parser les options temporelles
+            if olderThan != "" {
+                duration, err := time.ParseDuration(olderThan)
+                if err != nil {
+                    return fmt.Errorf("invalid --older-than value: %w", err)
+                }
+                opts.OlderThan = duration
+            }
+
+            if before != "" {
+                t, err := time.Parse("2006-01-02", before)
+                if err != nil {
+                    return fmt.Errorf("invalid --before date (use YYYY-MM-DD): %w", err)
+                }
+                opts.Before = t
+            }
+
+            m, err := manager.NewContainerManager(cfg)
+            if err != nil {
+                return err
+            }
+            defer m.Close()
+
+            for _, name := range args {
+                if err := m.RemoveContainer(context.Background(), name, opts); err != nil {
+                    return fmt.Errorf("failed to remove %s: %w", name, err)
+                }
+            }
+
+            return nil
+        },
+    }
+
+    cmd.Flags().BoolVarP(&opts.Force, "force", "f", false, 
+        "Force removal even if container exists")
+    cmd.Flags().BoolVarP(&opts.WithContainer, "with-container", "c", false,
+        "Stop and remove Docker container")
+    cmd.Flags().StringVar(&olderThan, "older-than", "",
+        "Remove entries older than duration (e.g., 30d, 6m, 1y)")
+    cmd.Flags().StringVar(&before, "before", "",
+        "Remove entries before date (YYYY-MM-DD)")
+    cmd.Flags().BoolVarP(&opts.All, "all", "a", false,
+        "Remove all entries for containers")
+    cmd.Flags().BoolVarP(&opts.DryRun, "dry-run", "n", false,
+        "Show what would be removed without taking action")
+    cmd.Flags().BoolVar(&opts.Zfs, "zfs", false,
+        "Also remove associated ZFS snapshots")
+
     return cmd
 }
 

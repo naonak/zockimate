@@ -56,7 +56,11 @@ func NewContainerManager(cfg *config.Config) (*ContainerManager, error) {
     // Initialiser le client Apprise si configuré
     var notifier *notify.AppriseClient
     if cfg.AppriseURL != "" {
-        notifier = notify.NewAppriseClient(cfg.AppriseURL, logger)
+        var err error
+        notifier, err = notify.NewAppriseClient(cfg.AppriseURL, logger)
+        if err != nil {
+            logger.Warnf("Failed to initialize Apprise notifications: %v", err)
+        }
     }
 
     return &ContainerManager{
@@ -78,6 +82,11 @@ func (cm *ContainerManager) Close() error {
     }
     if err := cm.db.Close(); err != nil {
         errs = append(errs, fmt.Errorf("failed to close database: %w", err))
+    }
+    if cm.notify != nil {
+        if err := cm.notify.Close(); err != nil {
+            errs = append(errs, fmt.Errorf("failed to close Apprise client: %w", err))
+        }
     }
 
     if len(errs) > 0 {

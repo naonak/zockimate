@@ -3,47 +3,73 @@ package notify
 
 import (
     "fmt"
+    "time"
     "net/http"
-    "net/url"
+    "encoding/json"
+    "github.com/sirupsen/logrus"
+    "zockimate/internal/types"
+
     "io"
     "strings"
-    "time"
-    "github.com/sirupsen/logrus"
-    "zockimate/internal/types" 
+    "bytes"
+
 )
 
-// AppriseClient gère les notifications via Apprise
 type AppriseClient struct {
     url        string
     httpClient *http.Client
     logger     *logrus.Logger
 }
 
-// NewAppriseClient crée un nouveau client Apprise
-func NewAppriseClient(appriseURL string, logger *logrus.Logger) *AppriseClient {
+// Types de notification
+const (
+    NotificationInfo    = "info"
+    NotificationSuccess = "success"
+    NotificationError   = "error"
+)
+
+type Notification struct {
+    Title    string   `json:"title"`
+    Body     string   `json:"body"`
+    Type     string   `json:"type"`
+    Tags     []string `json:"tags,omitempty"`
+}
+
+func NewAppriseClient(appriseURL string, logger *logrus.Logger) (*AppriseClient, error) {
+    if logger == nil {
+        logger = logrus.New()
+    }
+
+    // Convertir apprise:// en http:// si nécessaire
+    url := appriseURL
+    if strings.HasPrefix(url, "apprise://") {
+        url = "http://" + strings.TrimPrefix(url, "apprise://")
+        logger.Debugf("Converted Apprise URL from %s to %s", appriseURL, url)
+    }
+
     return &AppriseClient{
-        url: appriseURL,
+        url: url,
         httpClient: &http.Client{
             Timeout: 10 * time.Second,
         },
         logger: logger,
-    }
+    }, nil
 }
 
-// SendNotification envoie une notification via Apprise
 func (a *AppriseClient) SendNotification(title, message string, tags []string) error {
-    if a.url == "" {
-        return nil  // Pas d'URL = pas de notification
+    notification := Notification{
+        Title: title,
+        Body:  message,
+        Type:  NotificationInfo,
+        Tags:  tags,
     }
 
-    data := url.Values{}
-    data.Set("title", title)
-    data.Set("body", message)
-    if len(tags) > 0 {
-        data.Set("tags", strings.Join(tags, ","))
+    jsonData, err := json.Marshal(notification)
+    if err != nil {
+        return fmt.Errorf("failed to marshal notification: %w", err)
     }
 
-    resp, err := a.httpClient.PostForm(a.url, data)
+    resp, err := a.httpClient.Post(a.url, "application/json", bytes.NewBuffer(jsonData))
     if err != nil {
         return fmt.Errorf("failed to send notification: %w", err)
     }
@@ -51,43 +77,102 @@ func (a *AppriseClient) SendNotification(title, message string, tags []string) e
 
     if resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
-        return fmt.Errorf("notification failed with status %d: %s", 
-            resp.StatusCode, string(body))
+        return fmt.Errorf("notification failed with status %d: %s", resp.StatusCode, string(body))
     }
 
-    a.logger.Debugf("Notification sent: %s", title)
     return nil
 }
 
-// Helpers pour les messages communs
-func (a *AppriseClient) NotifyUpdateAvailable(container string, currentImg, newImg *types.ImageReference) {
+func (a *AppriseClient) NotifyUpdateAvailable(container string, currentImg, newImg *types.ImageReference) error {
     msg := fmt.Sprintf("Update available for %s:\nCurrent: %s\nNew: %s",
         container, currentImg.String(), newImg.String())
     
-    a.SendNotification(
-        "Container Update Available",
-        msg,
-        []string{"info", "update-available"},
-    )
+    notification := Notification{
+        Title: "Container Update Available",
+        Body:  msg,
+        Type:  NotificationInfo,
+        Tags:  []string{"info", "update-available"},
+    }
+
+    jsonData, err := json.Marshal(notification)
+    if err != nil {
+        return fmt.Errorf("failed to marshal notification: %w", err)
+    }
+
+    resp, err := a.httpClient.Post(a.url, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return fmt.Errorf("failed to send notification: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("notification failed with status %d: %s", resp.StatusCode, string(body))
+    }
+
+    return nil
 }
 
-func (a *AppriseClient) NotifyUpdateSuccess(container string, oldImg, newImg *types.ImageReference) {
+func (a *AppriseClient) NotifyUpdateSuccess(container string, oldImg, newImg *types.ImageReference) error {
     msg := fmt.Sprintf("Successfully updated %s:\nFrom: %s\nTo: %s",
         container, oldImg.String(), newImg.String())
     
-    a.SendNotification(
-        "Container Updated",
-        msg,
-        []string{"success", "update"},
-    )
+    notification := Notification{
+        Title: "Container Updated",
+        Body:  msg,
+        Type:  NotificationSuccess,
+        Tags:  []string{"success", "update"},
+    }
+
+    jsonData, err := json.Marshal(notification)
+    if err != nil {
+        return fmt.Errorf("failed to marshal notification: %w", err)
+    }
+
+    resp, err := a.httpClient.Post(a.url, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return fmt.Errorf("failed to send notification: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("notification failed with status %d: %s", resp.StatusCode, string(body))
+    }
+
+    return nil
 }
 
-func (a *AppriseClient) NotifyUpdateError(container string, err error) {
+func (a *AppriseClient) NotifyUpdateError(container string, err error) error {
     msg := fmt.Sprintf("Failed to update container %s:\n%v", container, err)
     
-    a.SendNotification(
-        "Container Update Failed",
-        msg,
-        []string{"error", "update"},
-    )
+    notification := Notification{
+        Title: "Container Update Failed",
+        Body:  msg,
+        Type:  NotificationError,
+        Tags:  []string{"error", "update"},
+    }
+
+    jsonData, err := json.Marshal(notification)
+    if err != nil {
+        return fmt.Errorf("failed to marshal notification: %w", err)
+    }
+
+    resp, err := a.httpClient.Post(a.url, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return fmt.Errorf("failed to send notification: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("notification failed with status %d: %s", resp.StatusCode, string(body))
+    }
+
+    return nil
+}
+
+func (a *AppriseClient) Close() error {
+    // Pas besoin de close pour le client HTTP
+    return nil
 }

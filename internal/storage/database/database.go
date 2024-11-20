@@ -335,3 +335,60 @@ func (d *Database) RenameContainer(oldName, newName string) (int64, error) {
 
     return result.RowsAffected()
 }
+func (d *Database) RemoveEntries(containerName string, opts options.RemoveOptions) (int64, error) {
+    var conditions []string
+    var args []interface{}
+
+    query := "DELETE FROM container_snapshots WHERE container_name = ?"
+    args = append(args, containerName)
+
+    if !opts.All {
+        if !opts.Before.IsZero() {
+            conditions = append(conditions, "created_at < ?")
+            args = append(args, opts.Before.Format("2006-01-02"))
+        }
+        if opts.OlderThan > 0 {
+            conditions = append(conditions, "created_at < ?")
+            args = append(args, time.Now().Add(-opts.OlderThan).Format("2006-01-02"))
+        }
+    }
+
+    if len(conditions) > 0 {
+        query += " AND " + strings.Join(conditions, " AND ")
+    }
+
+    // Si ZFS activé, d'abord récupérer les snapshots à supprimer
+    if opts.Zfs {
+        var snapshots []string
+        rows, err := d.db.Query("SELECT zfs_snapshot FROM container_snapshots WHERE "+query, args...)
+        if err != nil {
+            return 0, fmt.Errorf("failed to query ZFS snapshots: %w", err)
+        }
+        defer rows.Close()
+
+        for rows.Next() {
+            var snapshot string
+            if err := rows.Scan(&snapshot); err != nil {
+                return 0, fmt.Errorf("failed to scan snapshot: %w", err)
+            }
+            if snapshot != "" {
+                snapshots = append(snapshots, snapshot)
+            }
+        }
+
+        // Supprimer les snapshots ZFS
+        for _, snapshot := range snapshots {
+            if err := d.zfs.DeleteSnapshot(snapshot); err != nil {
+                d.logger.Warnf("Failed to delete ZFS snapshot %s: %v", snapshot, err)
+            }
+        }
+    }
+
+    // Supprimer les entrées
+    result, err := d.db.Exec(query, args...)
+    if err != nil {
+        return 0, fmt.Errorf("failed to delete entries: %w", err)
+    }
+
+    return result.RowsAffected()
+}

@@ -7,7 +7,6 @@ go 1.23
 
 require (
 	github.com/docker/docker v27.1.1+incompatible
-	// github.com/docker/docker v24.0.7+incompatible
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3

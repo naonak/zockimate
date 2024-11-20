@@ -258,3 +258,28 @@ func (c *Client) ContainerRename(ctx context.Context, oldName, newName string) e
     c.logger.Debugf("Successfully renamed container from %s to %s", oldName, newName)
     return nil
 }
+
+func (c *Client) RemoveContainer(ctx context.Context, name string, force bool) error {
+    c.logger.Debugf("Removing container %s (force: %v)", name, force)
+
+    if force {
+        // Stop avec timeout de 10 secondes
+        timeout := 10
+        if err := c.cli.ContainerStop(ctx, name, container.StopOptions{
+            Timeout: &timeout,
+        }); err != nil && !client.IsErrNotFound(err) {
+            c.logger.Warnf("Failed to stop container %s: %v", name, err)
+        }
+    }
+
+    err := c.cli.ContainerRemove(ctx, name, container.RemoveOptions{
+        Force:         force,
+        RemoveVolumes: false,
+        RemoveLinks:   false,
+    })
+    if err != nil && !client.IsErrNotFound(err) {
+        return fmt.Errorf("failed to remove container: %w", err)
+    }
+
+    return nil
+}
