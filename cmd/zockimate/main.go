@@ -18,6 +18,7 @@ import (
     "zockimate/internal/manager"
     "zockimate/internal/scheduler"
     "github.com/sirupsen/logrus"
+    "zockimate/internal/types"
     "zockimate/internal/types/options"
 )
 
@@ -83,7 +84,6 @@ Environment variables:
     }
 }
 
-// newUpdateCmd crée la commande update
 func newUpdateCmd(cfg *config.Config) *cobra.Command {
     var opts = options.NewUpdateOptions()
 
@@ -130,21 +130,43 @@ Examples:
                 }
             }
 
-            // Mettre à jour chaque conteneur
-            var updateErrors []string
+            var results []*types.UpdateResult
             for _, name := range containers {
-                if err := m.UpdateContainer(ctx, name, opts); err != nil {
-                    updateErrors = append(updateErrors,
-                        fmt.Sprintf("%s: %v", name, err))
+                result, err := m.UpdateContainer(ctx, name, opts)
+                if err != nil {
+                    cfg.Logger.Errorf("Fatal error updating %s: %v", name, err)
+                    continue
+                }
+                results = append(results, result)
+            }
+
+            var updated, skipped, failed int
+            var errors []string
+            
+            for _, r := range results {
+                if r.Success {
+                    updated++
+                    cfg.Logger.Infof("✓ %s: updated from %s to %s", 
+                        r.ContainerName, r.OldImage.String(), r.NewImage.String())
+                } else if r.Error != nil {
+                    failed++
+                    cfg.Logger.Errorf("✗ %s: %v", r.ContainerName, r.Error)
+                    errors = append(errors, fmt.Sprintf("%s: %v", r.ContainerName, r.Error))
+                } else if !r.NeedsUpdate {
+                    skipped++
+                    cfg.Logger.Infof("- %s: no update needed", r.ContainerName)
                 }
             }
 
-            // Gérer les erreurs
-            if len(updateErrors) > 0 {
-                return fmt.Errorf("update errors:\n%s", 
-                    strings.Join(updateErrors, "\n"))
+            if updated > 0 || skipped > 0 {
+                cfg.Logger.Infof("Summary: %d updated, %d skipped, %d failed", 
+                    updated, skipped, failed)
             }
 
+            if failed > 0 {
+                return fmt.Errorf("update errors:\n%s", strings.Join(errors, "\n"))
+            }
+            
             return nil
         },
     }
@@ -187,10 +209,10 @@ Examples:
                 return err
             }
             defer m.Close()
-
+        
             ctx := context.Background()
             containers := args
-
+        
             if len(containers) == 0 {
                 containers, err = m.GetContainers(ctx)
                 if err != nil {
@@ -201,25 +223,39 @@ Examples:
                     return nil
                 }
             }
-
-            updatesAvailable := false
+        
+            var needsUpdate, upToDate, failed int
+            var updates []string
+        
             for _, name := range containers {
                 result, err := m.CheckContainer(ctx, name, opts)
                 if err != nil {
-                    cfg.Logger.Errorf("Failed to check container %s: %v", name, err)
+                    failed++
+                    cfg.Logger.Errorf("✗ %s: %v", name, err)
                     continue
                 }
-
+        
                 if result.NeedsUpdate {
-                    updatesAvailable = true
+                    needsUpdate++
+                    cfg.Logger.Infof("✓ %s: update available from %s to %s",
+                        name, result.CurrentImage.String(), result.UpdateImage.String())
+                    updates = append(updates, name)
+                } else {
+                    upToDate++
+                    cfg.Logger.Debugf("- %s: up to date", name)
                 }
             }
-
-            // Exit code 1 si des mises à jour sont disponibles
-            if updatesAvailable {
-                return fmt.Errorf("updates available")
+        
+            if needsUpdate > 0 || upToDate > 0 {
+                cfg.Logger.Infof("Summary: %d need update, %d up to date, %d failed",
+                    needsUpdate, upToDate, failed)
             }
-
+        
+            // Exit code 1 si des mises à jour sont disponibles
+            if len(updates) > 0 {
+                return fmt.Errorf("updates available for: %s", strings.Join(updates, ", "))
+            }
+        
             return nil
         },
     }
@@ -283,7 +319,14 @@ Examples:
                 }
             }
 
-            return m.RollbackContainer(context.Background(), name, opts)
+            result, err := m.RollbackContainer(context.Background(), name, opts)
+            if err != nil {
+                return err
+            }
+            if !result.Success {
+                return fmt.Errorf("rollback failed: %v", result.Error)
+            }
+            return nil
         },
     }
 
@@ -605,35 +648,57 @@ Each snapshot includes:
 }
 
 func newRenameCmd(cfg *config.Config) *cobra.Command {
-    var opts options.RenameOptions
+   var opts options.RenameOptions
 
-    cmd := &cobra.Command{
-        Use:   "rename old-name new-name",
-        Short: "Rename a container",
-        Long: `Rename a container in both Docker (if it exists) and the database.
+   cmd := &cobra.Command{
+       Use:   "rename old-name new-name",
+       Short: "Rename a container",
+       Long: `Rename a container in both Docker (if it exists) and the database.
 If the container exists in Docker, it will be renamed there and in the database.
 If it only exists in the database, only the database entries will be updated.
 
 Examples:
-  # Rename a container everywhere
-  zockimate rename old-container new-container
+ # Rename a container everywhere
+ zockimate rename old-container new-container
 
-  # Rename only in database
-  zockimate rename --db-only old-container new-container`,
-        Args: cobra.ExactArgs(2),
-        RunE: func(cmd *cobra.Command, args []string) error {
-            m, err := manager.NewContainerManager(cfg)
-            if err != nil {
-                return err
-            }
-            defer m.Close()
+ # Rename only in database
+ zockimate rename --db-only old-container new-container`,
+       Args: cobra.ExactArgs(2),
+       RunE: func(cmd *cobra.Command, args []string) error {
+           m, err := manager.NewContainerManager(cfg)
+           if err != nil {
+               return err
+           }
+           defer m.Close()
 
-            return m.RenameContainer(context.Background(), args[0], args[1], opts)
-        },
-    }
+           ctx := context.Background()
+           oldName, newName := args[0], args[1]
+           
+           result, err := m.RenameContainer(ctx, oldName, newName, opts)
+           if err != nil {
+               cfg.Logger.Errorf("Fatal error renaming %s: %v", oldName, err)
+               return err
+           }
+           
+           if result.Success {
+               status := "renamed in database only"
+               if result.DockerRenamed {
+                   status = "renamed in Docker and database"
+               }
+               cfg.Logger.Infof("✓ %s -> %s: %s (%d entries)", 
+                   result.OldName, result.NewName, status, result.EntriesRenamed)
+           } else {
+               cfg.Logger.Errorf("✗ %s -> %s: %v", 
+                   result.OldName, result.NewName, result.Error)
+               return fmt.Errorf("rename failed")
+           }
+           
+           return nil
+       },
+   }
 
-    cmd.Flags().BoolVar(&opts.DbOnly, "db-only", false, "Only rename in database, ignore Docker")
-    return cmd
+   cmd.Flags().BoolVar(&opts.DbOnly, "db-only", false, "Only rename in database, ignore Docker")
+   return cmd
 }
 
 func newRemoveCmd(cfg *config.Config) *cobra.Command {
@@ -652,35 +717,47 @@ Use --force to remove entries anyway or --with-container to also remove the Dock
 Can also clean up old entries based on age or date.`,
         Args: cobra.MinimumNArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
-            // Parser les options temporelles
-            if olderThan != "" {
-                duration, err := time.ParseDuration(olderThan)
-                if err != nil {
-                    return fmt.Errorf("invalid --older-than value: %w", err)
-                }
-                opts.OlderThan = duration
-            }
-
-            if before != "" {
-                t, err := time.Parse("2006-01-02", before)
-                if err != nil {
-                    return fmt.Errorf("invalid --before date (use YYYY-MM-DD): %w", err)
-                }
-                opts.Before = t
-            }
-
             m, err := manager.NewContainerManager(cfg)
             if err != nil {
                 return err
             }
             defer m.Close()
-
+            
+            var results []*types.RemoveResult
+ 
+            ctx := context.Background()
+            
             for _, name := range args {
-                if err := m.RemoveContainer(context.Background(), name, opts); err != nil {
-                    return fmt.Errorf("failed to remove %s: %w", name, err)
+                result, err := m.RemoveContainer(ctx, name, opts)
+                if err != nil {
+                    cfg.Logger.Errorf("Fatal error removing %s: %v", name, err)
+                    continue
+                }
+                results = append(results, result)
+            }
+    
+            var removed, failed int
+            for _, r := range results {
+                if r.Success {
+                    removed++
+                    status := "removed from database"
+                    if r.ContainerRemoved {
+                        status = "removed from Docker and database"
+                    }
+                    cfg.Logger.Infof("✓ %s: %s (%d entries)", r.ContainerName, status, r.EntriesDeleted)
+                } else {
+                    failed++
+                    cfg.Logger.Errorf("✗ %s: %v", r.ContainerName, r.Error)
                 }
             }
-
+    
+            if removed > 0 || failed > 0 {
+                cfg.Logger.Infof("Summary: %d removed, %d failed", removed, failed)
+            }
+    
+            if failed > 0 {
+                return fmt.Errorf("some containers failed to be removed")
+            }
             return nil
         },
     }

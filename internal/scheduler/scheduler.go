@@ -9,12 +9,14 @@ import (
     "sync"
     "syscall"
     "time"
+    "strings"
 
     "github.com/robfig/cron/v3"
     "github.com/sirupsen/logrus"
 
     "zockimate/internal/manager"
     "zockimate/internal/types/options"
+    "zockimate/internal/types"
 )
 
 // Scheduler gère les opérations programmées sur les conteneurs
@@ -123,57 +125,69 @@ func (s *Scheduler) runScheduledTask() {
 
 // performScheduledCheck vérifie les mises à jour disponibles
 func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []string, opts options.CheckOptions) {
-    var updates []string
-
+    var upToDate, needsUpdate, failed int
+    
     for _, name := range containers {
         result, err := s.manager.CheckContainer(ctx, name, opts)
         if err != nil {
-            s.logger.Errorf("Failed to check container %s: %v", name, err)
+            failed++
+            s.logger.Errorf("✗ %s: %v", name, err)
             continue
         }
 
         if result.NeedsUpdate {
-            updates = append(updates, fmt.Sprintf(
-                "%s:  Current: %s  Latest:  %s",
-                name,
-                result.CurrentImage.String(),
-                result.UpdateImage.String(),
-            ))
+            needsUpdate++
+            s.logger.Infof("✓ %s: update available (%s -> %s)",
+                name, result.CurrentImage.String(), result.UpdateImage.String())
+        } else {
+            upToDate++
+            s.logger.Debugf("- %s: up to date", name)
         }
     }
-    
-    if len(updates) > 0 {
-        for _, update := range updates {
-            s.logger.Info(update)
-        }
-    } else {
-        s.logger.Info("All containers are up to date")
-    }
+
+    s.logger.Infof("Summary: %d need update, %d up to date, %d failed",
+        needsUpdate, upToDate, failed)
 }
 
 // performScheduledUpdate met à jour les conteneurs
 func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []string, opts options.UpdateOptions) {
-    var succeeded, failed []string
+    var results []*types.UpdateResult
 
     for _, name := range containers {
-        err := s.manager.UpdateContainer(ctx, name, opts)
-
+        result, err := s.manager.UpdateContainer(ctx, name, opts)
         if err != nil {
-            s.logger.Errorf("Failed to update container %s: %v", name, err)
-            failed = append(failed, name)
-        } else {
-            s.logger.Infof("Successfully updated container %s", name)
-            succeeded = append(succeeded, name)
+            s.logger.Errorf("Fatal error updating %s: %v", name, err)
+            continue
+        }
+        results = append(results, result)
+    }
+
+    var updated, skipped, failed int
+    var errors []string
+
+    for _, r := range results {
+        if r.Success {
+            updated++
+            s.logger.Infof("✓ %s: updated from %s to %s", 
+                r.ContainerName, r.OldImage.String(), r.NewImage.String())
+        } else if r.Error != nil {
+            failed++
+            s.logger.Errorf("✗ %s: %v", r.ContainerName, r.Error)
+            errors = append(errors, fmt.Sprintf("%s: %v", r.ContainerName, r.Error))
+        } else if !r.NeedsUpdate {
+            skipped++
+            s.logger.Infof("- %s: no update needed", r.ContainerName)
         }
     }
 
-    // Log le résumé
-    if len(failed) > 0 {
-        s.logger.Errorf("Failed to update %d containers: %v", len(failed), failed)
+    // Log summary
+    if updated > 0 || skipped > 0 {
+        s.logger.Infof("Summary: %d updated, %d skipped, %d failed", 
+            updated, skipped, failed)
     }
-    if len(succeeded) > 0 {
-        s.logger.Infof("Successfully updated %d containers: %v", 
-            len(succeeded), succeeded)
+    
+    if len(errors) > 0 {
+        s.logger.Errorf("Failed updates:\n%s", strings.Join(errors, "\n"))
     }
 }
 

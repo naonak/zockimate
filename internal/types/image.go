@@ -41,11 +41,3 @@ func (ir *ImageReference) BestReference() string {
 func (ir *ImageReference) IsExactReference() bool {
     return ir.RepoDigest != "" || ir.ID != ""  // Soit on a un digest, soit un ID local
 }
-
-// CheckResult contient le résultat d'une vérification de mise à jour
-type CheckResult struct {
-    NeedsUpdate    bool              // Si une mise à jour est nécessaire
-    CurrentImage   *ImageReference   // Référence de l'image actuelle
-    UpdateImage    *ImageReference   // Référence de l'image à utiliser pour la mise à jour
-    Error          error             // Erreur éventuelle
-}

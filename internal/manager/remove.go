@@ -5,19 +5,22 @@ import (
     "fmt"
 
     "zockimate/pkg/utils"
+    "zockimate/internal/types"
     "zockimate/internal/types/options"
 )
 
-func (cm *ContainerManager) RemoveContainer(ctx context.Context, name string, opts options.RemoveOptions) error {
+// internal/manager/remove.go
+func (cm *ContainerManager) RemoveContainer(ctx context.Context, name string, opts options.RemoveOptions) (*types.RemoveResult, error) {
     cm.lock.Lock()
     defer cm.lock.Unlock()
 
+    result := &types.RemoveResult{ContainerName: name}
     name = utils.CleanContainerName(name)
-    cm.logger.Infof("Starting remove process for container: %s", name)
+    cm.logger.Debugf("Starting remove process for container: %s", name)
 
     if opts.DryRun {
-        cm.logger.Infof("Dry run: would remove container %s", name)
-        return nil
+        cm.logger.Debugf("Dry run: would remove container %s", name)
+        return result, nil
     }
 
     // Vérifier si le conteneur existe dans Docker
@@ -26,29 +29,35 @@ func (cm *ContainerManager) RemoveContainer(ctx context.Context, name string, op
 
     if containerExists {
         if !opts.Force && !opts.WithContainer {
-            return fmt.Errorf("container %s still exists in Docker. Use --force or --with-container to remove anyway", name)
+            result.Error = fmt.Errorf("container %s still exists in Docker. Use --force or --with-container to remove anyway", name)
+            return result, nil
         }
 
         if opts.WithContainer {
-            // Arrêter et supprimer le conteneur
             if err := cm.docker.RemoveContainer(ctx, name, true); err != nil {
-                return fmt.Errorf("failed to remove Docker container: %w", err)
+                result.Error = fmt.Errorf("failed to remove Docker container: %w", err)
+                return result, nil
             }
-            cm.logger.Infof("Removed Docker container: %s", name)
+            result.ContainerRemoved = true
+            cm.logger.Debugf("Removed Docker container: %s", name)
         }
     }
 
     // Supprimer les entrées de la base de données
     deleted, err := cm.db.RemoveEntries(name, opts)
     if err != nil {
-        return fmt.Errorf("failed to remove database entries: %w", err)
+        result.Error = fmt.Errorf("failed to remove database entries: %w", err)
+        return result, nil
     }
 
+    result.EntriesDeleted = deleted
+    result.Success = true
+
     if deleted > 0 {
-        cm.logger.Infof("Removed %d database entries for container %s", deleted, name)
+        cm.logger.Debugf("Removed %d database entries for container %s", deleted, name)
     } else {
         cm.logger.Warnf("No database entries found for container %s", name)
     }
 
-    return nil
+    return result, nil
 }

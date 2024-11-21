@@ -19,7 +19,7 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
 
     result := types.CheckResult{}
     name = utils.CleanContainerName(name)
-    cm.logger.Infof("Starting check process for container: %s", name)
+    cm.logger.Debugf("Starting check process for container: %s", name)
 
     // Inspecter le conteneur
     ctn, err := cm.docker.InspectContainer(ctx, name)
@@ -103,7 +103,7 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
     }
 
     if result.NeedsUpdate {
-        cm.logger.Infof("Update available for %s: %s -> %s",
+        cm.logger.Debugf("Update available for %s: %s -> %s",
             name,
             utils.ShortenID(currentImage.ID),
             utils.ShortenID(latestImage.ID))

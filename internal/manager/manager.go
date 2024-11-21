@@ -122,7 +122,7 @@ func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opt
 
     // Si dry-run, simuler seulement
     if opts.DryRun {
-        cm.logger.Infof("Dry run: would create snapshot for container %s", name)
+        cm.logger.Debugf("Dry run: would create snapshot for container %s", name)
         return nil, nil
     }
 
@@ -198,7 +198,7 @@ func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opt
         }
     }
 
-    cm.logger.Infof("Successfully created snapshot %d for container %s", snapshot.ID, name)
+    cm.logger.Debugf("Successfully created snapshot %d for container %s", snapshot.ID, name)
 
     return snapshot, nil
 }
