@@ -57,7 +57,15 @@ func NewContainerManager(cfg *config.Config) (*ContainerManager, error) {
     var notifier *notify.AppriseClient
     if cfg.AppriseURL != "" {
         var err error
-        notifier, err = notify.NewAppriseClient(cfg.AppriseURL, logger)
+        notifier, err = notify.NewAppriseClient(
+            cfg.AppriseURL, 
+            logger,
+            notify.AppriseOptions{
+                Format: notify.FormatText,           // Format par défaut
+                Type:   notify.NotificationInfo,     // Type par défaut
+                // Les autres options restent à leurs valeurs par défaut
+            },
+        )
         if err != nil {
             logger.Warnf("Failed to initialize Apprise notifications: %v", err)
         }
