@@ -171,7 +171,7 @@ Examples:
         },
     }
 
-    cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
+    cmd.Flags().BoolVarP(&opts.Notify, "notify", "N", false,
         "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force update even if no new image available")
@@ -262,7 +262,7 @@ Examples:
         },
     }
 
-    cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
+    cmd.Flags().BoolVarP(&opts.Notify, "notify", "N", false,
         "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force check even with local image")
@@ -520,7 +520,7 @@ func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
         },
     }
 
-    cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
+    cmd.Flags().BoolVarP(&opts.Notify, "notify", "N", true,
         "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force update even if no new image available")
@@ -570,7 +570,7 @@ func newScheduleCheckCmd(cfg *config.Config) *cobra.Command {
         },
     }
 
-    cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
+    cmd.Flags().BoolVarP(&opts.Notify, "notify", "N", true,
         "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force check even with local image")
