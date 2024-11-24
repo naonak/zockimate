@@ -172,7 +172,7 @@ Examples:
     }
 
     cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
-        "Send notifications through Apprise when updates are found or actions are completed")
+        "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force update even if no new image available")
     cmd.Flags().BoolVarP(&opts.DryRun, "dry-run", "n", false,
@@ -263,7 +263,7 @@ Examples:
     }
 
     cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
-        "Send notifications through Apprise when updates are found or actions are completed")
+        "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force check even with local image")
     cmd.Flags().BoolVarP(&opts.Cleanup, "cleanup", "c", true,
@@ -521,7 +521,7 @@ func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
     }
 
     cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
-        "Send notifications through Apprise when updates are found or actions are completed")
+        "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force update even if no new image available")
     cmd.Flags().BoolVarP(&opts.DryRun, "dry-run", "n", false,
@@ -571,7 +571,7 @@ func newScheduleCheckCmd(cfg *config.Config) *cobra.Command {
     }
 
     cmd.Flags().BoolVarP(&opts.Notify, "notify", "n", true,
-        "Send notifications through Apprise when updates are found or actions are completed")
+        "Send notifications through Apprise")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force check even with local image")
     cmd.Flags().BoolVarP(&opts.Cleanup, "cleanup", "c", true,
