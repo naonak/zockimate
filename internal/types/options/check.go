@@ -7,6 +7,7 @@ type CheckOptions struct {
     Force    bool      // Forcer la vérification même avec image locale
     Cleanup  bool      // Nettoyer les images téléchargées après vérification
     Timeout   time.Duration
+    Notify   bool
 }
 
 // Définir une fonction pour créer des CheckOptions avec des valeurs par défaut
@@ -15,6 +16,7 @@ func NewCheckOptions(opts ...CheckOption) CheckOptions {
         Force:    false,
         Cleanup:  true,
         Timeout:  DefaultCheckTimeout,
+        Notify: false,
     }
     for _, opt := range opts {
         opt(&options)
@@ -34,6 +36,12 @@ func WithCheckForce(force bool) CheckOption {
 func WithCheckCleanup(cleanup bool) CheckOption {
     return func(o *CheckOptions) {
         o.Cleanup = cleanup
+    }
+}
+
+func WithCheckNotify(notify bool) CheckOption {
+    return func(o *CheckOptions) {
+        o.Notify = notify
     }
 }
 

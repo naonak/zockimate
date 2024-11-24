@@ -10,6 +10,7 @@ type UpdateOptions struct {
     DryRun    bool
     Timeout   time.Duration
     ContainerReadyTimeout   time.Duration
+    Notify   bool
 }
 
 // Pour UpdateOptions
@@ -19,6 +20,7 @@ func NewUpdateOptions(opts ...UpdateOption) UpdateOptions {
         DryRun:    false,
         Timeout:   DefaultUpdateTimeout,
         ContainerReadyTimeout: DefaultContainerReadyTimeout,
+        Notify: false,
     }
     for _, opt := range opts {
         opt(&options)
@@ -61,5 +63,11 @@ func WithUpdateTimeout(timeout time.Duration) UpdateOption {
 func WithUpdateContainerReadyTimeout(timeout time.Duration) UpdateOption {
     return func(o *UpdateOptions) {
         o.ContainerReadyTimeout = timeout
+    }
+}
+
+func WithUpdateNotify(notify bool) UpdateOption {
+    return func(o *UpdateOptions) {
+        o.Notify = notify
     }
 }
