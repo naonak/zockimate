@@ -108,15 +108,6 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
             utils.ShortenID(currentImage.ID),
             utils.ShortenID(latestImage.ID))
 
-        if cm.notify != nil && opts.Notify {
-            cm.notifyf(
-                "Update Available",
-                "Container %s has an update available.\nCurrent: %s\nLatest: %s",
-                name,
-                currentImage.String(),
-                latestImage.String(),
-            )
-        }
     } else {
         cm.logger.Debugf("No update needed for %s", name)
     }

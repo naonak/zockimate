@@ -161,15 +161,5 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     cm.logger.Debugf("Successfully updated container %s to image %s",
         name, utils.ShortenID(checkResult.UpdateImage.ID))
 
-    if cm.notify != nil && opts.Notify {
-        cm.notifyf(
-            "Update Successful",
-            "Container %s successfully updated from %s to %s",
-            name,
-            checkResult.CurrentImage.String(),
-            checkResult.UpdateImage.String(),
-        )
-    }
-
     return result, nil
 }

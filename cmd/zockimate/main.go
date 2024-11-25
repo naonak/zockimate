@@ -142,25 +142,59 @@ Examples:
 
             var updated, skipped, failed int
             var errors []string
+            var updateDetails []string
+            var failureDetails []string
             
             for _, r := range results {
                 if r.Success {
                     updated++
-                    cfg.Logger.Infof("✓ %s: updated from %s to %s", 
+                    updateMsg := fmt.Sprintf("%s: %s → %s", 
                         r.ContainerName, r.OldImage.String(), r.NewImage.String())
+                    cfg.Logger.Infof("✓ %s", updateMsg)
+                    updateDetails = append(updateDetails, updateMsg)
                 } else if r.Error != nil {
                     failed++
-                    cfg.Logger.Errorf("✗ %s: %v", r.ContainerName, r.Error)
-                    errors = append(errors, fmt.Sprintf("%s: %v", r.ContainerName, r.Error))
+                    errMsg := fmt.Sprintf("%s: %v", r.ContainerName, r.Error)
+                    cfg.Logger.Errorf("✗ %s", errMsg)
+                    errors = append(errors, errMsg)
+                    failureDetails = append(failureDetails, errMsg)
                 } else if !r.NeedsUpdate {
                     skipped++
                     cfg.Logger.Infof("- %s: no update needed", r.ContainerName)
                 }
             }
 
-            if updated > 0 || skipped > 0 {
-                cfg.Logger.Infof("Summary: %d updated, %d skipped, %d failed", 
-                    updated, skipped, failed)
+            summaryMsg := fmt.Sprintf("Summary: %d updated, %d skipped, %d failed", 
+                updated, skipped, failed)
+            cfg.Logger.Info(summaryMsg)
+
+            // Pour la commande update
+            if opts.Notify && !opts.DryRun && cfg.AppriseURL != "" {
+                var updatedContainers []string
+                var failedContainers []string
+                
+                for _, r := range results {
+                    if r.Success {
+                        updatedContainers = append(updatedContainers, r.ContainerName)
+                    } else if r.Error != nil {
+                        failedContainers = append(failedContainers, r.ContainerName)
+                    }
+                }
+                
+                notifTitle := fmt.Sprintf("Updates Completed (%d/%d)", updated, len(containers))
+                
+                var parts []string
+                if len(updatedContainers) > 0 {
+                    parts = append(parts, strings.Join(updatedContainers, ", "))
+                }
+                if len(failedContainers) > 0 {
+                    parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedContainers, ", ")))
+                }
+                notifMsg := strings.Join(parts, "\n")
+                
+                if err := m.SendNotification(notifTitle, notifMsg); err != nil {
+                    cfg.Logger.Warnf("Failed to send notification: %v", err)
+                }
             }
 
             if failed > 0 {
@@ -172,7 +206,7 @@ Examples:
     }
 
     cmd.Flags().BoolVar(&opts.Notify, "notify", false,
-        "Send notifications through Apprise")
+        "Send a summary notification through Apprise when updates complete")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force update even if no new image available")
     cmd.Flags().BoolVarP(&opts.DryRun, "dry-run", "n", false,
@@ -181,9 +215,7 @@ Examples:
     return cmd
 }
 
-// newCheckCmd crée la commande check
 func newCheckCmd(cfg *config.Config) *cobra.Command {
-
     var opts = options.NewCheckOptions()
 
     cmd := &cobra.Command{
@@ -227,6 +259,7 @@ Examples:
             }
         
             var needsUpdate, upToDate, failed int
+            var updateDetails []string
             var updates []string
         
             for _, name := range containers {
@@ -239,20 +272,41 @@ Examples:
         
                 if result.NeedsUpdate {
                     needsUpdate++
-                    cfg.Logger.Infof("✓ %s: update available from %s to %s",
+                    updateMsg := fmt.Sprintf("%s: %s → %s",
                         name, result.CurrentImage.String(), result.UpdateImage.String())
+                    cfg.Logger.Infof("✓ %s", updateMsg)
                     updates = append(updates, name)
+                    updateDetails = append(updateDetails, updateMsg)
                 } else {
                     upToDate++
                     cfg.Logger.Debugf("- %s: up to date", name)
                 }
             }
         
-            if needsUpdate > 0 || upToDate > 0 {
-                cfg.Logger.Infof("Summary: %d need update, %d up to date, %d failed",
-                    needsUpdate, upToDate, failed)
+            summaryMsg := fmt.Sprintf("Summary: %d need update, %d up to date, %d failed",
+                needsUpdate, upToDate, failed)
+            cfg.Logger.Info(summaryMsg)
+
+            // Envoyer une notification unique si des mises à jour sont disponibles
+            if opts.Notify && needsUpdate > 0 && cfg.AppriseURL != "" {
+                notifTitle := fmt.Sprintf("Updates Available (%d/%d)", needsUpdate, len(containers))
+                notifMsg := strings.Join(updates, ", ") // conteneurs avec update dispo
+                
+                if failed > 0 {
+                    var failedContainers []string
+                    for _, name := range containers {
+                        if _, err := m.CheckContainer(ctx, name, opts); err != nil {
+                            failedContainers = append(failedContainers, name)
+                        }
+                    }
+                    notifMsg += fmt.Sprintf("\nFailed: %s", strings.Join(failedContainers, ", "))
+                }
+                
+                if err := m.SendNotification(notifTitle, notifMsg); err != nil {
+                    cfg.Logger.Warnf("Failed to send notification: %v", err)
+                }
             }
-        
+
             // Exit code 1 si des mises à jour sont disponibles
             if len(updates) > 0 {
                 return fmt.Errorf("updates available for: %s", strings.Join(updates, ", "))
@@ -263,7 +317,7 @@ Examples:
     }
 
     cmd.Flags().BoolVar(&opts.Notify, "notify", false,
-        "Send notifications through Apprise")
+        "Send a summary notification through Apprise when updates are found")
     cmd.Flags().BoolVarP(&opts.Force, "force", "f", false,
         "Force check even with local image")
     cmd.Flags().BoolVarP(&opts.Cleanup, "cleanup", "c", true,

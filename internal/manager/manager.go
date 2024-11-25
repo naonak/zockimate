@@ -210,3 +210,15 @@ func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opt
 
     return snapshot, nil
 }
+
+// SendNotification envoie une notification via Apprise
+func (cm *ContainerManager) SendNotification(title, message string) error {
+    if cm.notify == nil {
+        return nil // Pas de notifieur configuré
+    }
+
+    if err := cm.notify.SendNotification(title, message, nil); err != nil {
+        return fmt.Errorf("failed to send notification: %w", err)
+    }
+    return nil
+}

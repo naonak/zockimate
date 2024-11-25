@@ -125,20 +125,24 @@ func (s *Scheduler) runScheduledTask() {
 
 // performScheduledCheck vérifie les mises à jour disponibles
 func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []string, opts options.CheckOptions) {
-    var upToDate, needsUpdate, failed int
+    var needsUpdate, upToDate, failed int
+    var updatesAvailable []string
+    var failedChecks []string
     
     for _, name := range containers {
         result, err := s.manager.CheckContainer(ctx, name, opts)
         if err != nil {
             failed++
             s.logger.Errorf("✗ %s: %v", name, err)
+            failedChecks = append(failedChecks, name)
             continue
         }
 
         if result.NeedsUpdate {
             needsUpdate++
-            s.logger.Infof("✓ %s: update available (%s -> %s)",
+            s.logger.Infof("✓ %s: %s → %s",
                 name, result.CurrentImage.String(), result.UpdateImage.String())
+            updatesAvailable = append(updatesAvailable, name)
         } else {
             upToDate++
             s.logger.Debugf("- %s: up to date", name)
@@ -147,12 +151,31 @@ func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []stri
 
     s.logger.Infof("Summary: %d need update, %d up to date, %d failed",
         needsUpdate, upToDate, failed)
+
+    // Envoyer une notification unique si des mises à jour sont disponibles
+    if opts.Notify && needsUpdate > 0 {
+        notifTitle := fmt.Sprintf("Scheduled Check: Updates Available (%d/%d)", 
+            needsUpdate, len(containers))
+        
+        var parts []string
+        if len(updatesAvailable) > 0 {
+            parts = append(parts, strings.Join(updatesAvailable, ", "))
+        }
+        if len(failedChecks) > 0 {
+            parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedChecks, ", ")))
+        }
+        
+        notifMsg := strings.Join(parts, "\n")
+
+        if err := s.manager.SendNotification(notifTitle, notifMsg); err != nil {
+            s.logger.Warnf("Failed to send notification: %v", err)
+        }
+    }
 }
 
 // performScheduledUpdate met à jour les conteneurs
 func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []string, opts options.UpdateOptions) {
     var results []*types.UpdateResult
-
     for _, name := range containers {
         result, err := s.manager.UpdateContainer(ctx, name, opts)
         if err != nil {
@@ -163,31 +186,46 @@ func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []str
     }
 
     var updated, skipped, failed int
-    var errors []string
+    var updatedContainers []string
+    var failedContainers []string
 
     for _, r := range results {
         if r.Success {
             updated++
-            s.logger.Infof("✓ %s: updated from %s to %s", 
+            s.logger.Infof("✓ %s: %s → %s", 
                 r.ContainerName, r.OldImage.String(), r.NewImage.String())
+            updatedContainers = append(updatedContainers, r.ContainerName)
         } else if r.Error != nil {
             failed++
             s.logger.Errorf("✗ %s: %v", r.ContainerName, r.Error)
-            errors = append(errors, fmt.Sprintf("%s: %v", r.ContainerName, r.Error))
+            failedContainers = append(failedContainers, r.ContainerName)
         } else if !r.NeedsUpdate {
             skipped++
             s.logger.Infof("- %s: no update needed", r.ContainerName)
         }
     }
 
-    // Log summary
-    if updated > 0 || skipped > 0 {
-        s.logger.Infof("Summary: %d updated, %d skipped, %d failed", 
-            updated, skipped, failed)
-    }
-    
-    if len(errors) > 0 {
-        s.logger.Errorf("Failed updates:\n%s", strings.Join(errors, "\n"))
+    s.logger.Infof("Summary: %d updated, %d skipped, %d failed", 
+        updated, skipped, failed)
+
+    // Envoyer une notification unique avec le résumé
+    if opts.Notify && !opts.DryRun && (updated > 0 || failed > 0) {
+        notifTitle := fmt.Sprintf("Scheduled Updates Completed (%d/%d)",
+            updated, len(containers))
+        
+        var parts []string
+        if len(updatedContainers) > 0 {
+            parts = append(parts, strings.Join(updatedContainers, ", "))
+        }
+        if len(failedContainers) > 0 {
+            parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedContainers, ", ")))
+        }
+        
+        notifMsg := strings.Join(parts, "\n")
+
+        if err := s.manager.SendNotification(notifTitle, notifMsg); err != nil {
+            s.logger.Warnf("Failed to send notification: %v", err)
+        }
     }
 }
 
