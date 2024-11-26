@@ -190,7 +190,8 @@ Examples:
                 if len(failedContainers) > 0 {
                     parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedContainers, ", ")))
                 }
-                notifMsg := strings.Join(parts, "\n")
+                notifMsg := fmt.Sprintf("%d updated, %d skipped, %d failed.", 
+                updated, skipped, failed) + "\nUpdated: " + strings.Join(parts, "\n")
                 
                 if err := m.SendNotification(notifTitle, notifMsg); err != nil {
                     cfg.Logger.Warnf("Failed to send notification: %v", err)
@@ -290,8 +291,10 @@ Examples:
             // Envoyer une notification unique si des mises à jour sont disponibles
             if opts.Notify && needsUpdate > 0 && cfg.AppriseURL != "" {
                 notifTitle := fmt.Sprintf("Updates Available (%d/%d)", needsUpdate, len(containers))
-                notifMsg := strings.Join(updates, ", ") // conteneurs avec update dispo
-                
+
+                notifMsg := fmt.Sprintf("%d need update, %d up to date, %d failed.", 
+                needsUpdate, upToDate, failed) + "\nUpdate needed: " + strings.Join(updates, "\n")
+
                 if failed > 0 {
                     var failedContainers []string
                     for _, name := range containers {

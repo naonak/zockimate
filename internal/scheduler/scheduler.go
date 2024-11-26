@@ -164,9 +164,10 @@ func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []stri
         if len(failedChecks) > 0 {
             parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedChecks, ", ")))
         }
-        
-        notifMsg := strings.Join(parts, "\n")
 
+        notifMsg := fmt.Sprintf("%d need update, %d up to date, %d failed.", 
+        needsUpdate, upToDate, failed) + "\nUpdate needed: " + strings.Join(parts, "\n")
+        
         if err := s.manager.SendNotification(notifTitle, notifMsg); err != nil {
             s.logger.Warnf("Failed to send notification: %v", err)
         }
@@ -220,8 +221,9 @@ func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []str
         if len(failedContainers) > 0 {
             parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedContainers, ", ")))
         }
-        
-        notifMsg := strings.Join(parts, "\n")
+
+        notifMsg := fmt.Sprintf("%d updated, %d skipped, %d failed.", 
+        updated, skipped, failed) + "\nUpdated: " + strings.Join(parts, "\n")
 
         if err := s.manager.SendNotification(notifTitle, notifMsg); err != nil {
             s.logger.Warnf("Failed to send notification: %v", err)
