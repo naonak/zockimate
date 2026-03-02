@@ -81,7 +81,12 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     }
 
     cm.lock.Lock()
-    defer cm.lock.Unlock()
+    var unlocked bool
+    defer func() {
+        if !unlocked {
+            cm.lock.Unlock()
+        }
+    }()
 
     // Récupérer la configuration actuelle
     containerConfig, hostConfig, networkConfig, err := cm.docker.GetContainerConfigs(ctn)
@@ -136,7 +141,8 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
         result.RollbackNeeded = true
         
         cm.lock.Unlock()
-    
+        unlocked = true
+
         rollbackResult, rollbackErr := cm.RollbackContainer(ctx, name, options.RollbackOptions{
             SnapshotID: safetySnapshot.ID,
             Image:     true,

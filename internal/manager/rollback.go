@@ -166,14 +166,6 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
         }
     }
     
-    // Si on restaure l'image
-    if opts.Image {
-        config.Image = snapshot.ImageRef.BestReference()
-        if snapshot.ImageRef.Original != "" {
-            config.Labels["zockimate.original_image"] = snapshot.ImageRef.Original
-        }
-    }
-
     // Recréer le conteneur avec les pointeurs corrects
     if err := cm.docker.RecreateContainer(ctx, name, &config, &hostConfig, &networkConfig); err != nil {
         result.Error = fmt.Errorf("failed to recreate container: %w", err)

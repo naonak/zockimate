@@ -6,7 +6,6 @@ import (
     "fmt"
     "os"
     "os/signal"
-    "sync"
     "syscall"
     "time"
     "strings"
@@ -29,7 +28,6 @@ type Scheduler struct {
     checkOnly  bool              
     logger     *logrus.Logger
     stopChan   chan struct{}
-    wg         sync.WaitGroup
 }
 
 // Options pour la configuration du scheduler
@@ -81,17 +79,18 @@ func (s *Scheduler) Start(cronExpr string) error {
     sigChan := make(chan os.Signal, 1)
     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-    s.wg.Add(1)
     go func() {
-        defer s.wg.Done()
         select {
         case sig := <-sigChan:
             s.logger.Infof("Received signal %v, stopping scheduler...", sig)
-            s.Stop()
+            close(s.stopChan)
         case <-s.stopChan:
-            return
         }
     }()
+
+    // Bloquer jusqu'à l'arrêt
+    <-s.stopChan
+    s.Stop()
 
     return nil
 }
@@ -177,9 +176,13 @@ func (s *Scheduler) performScheduledCheck(ctx context.Context, containers []stri
 // performScheduledUpdate met à jour les conteneurs
 func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []string, opts options.UpdateOptions) {
     var results []*types.UpdateResult
+    var fatalErrors int
+    var fatalContainers []string
     for _, name := range containers {
         result, err := s.manager.UpdateContainer(ctx, name, opts)
         if err != nil {
+            fatalErrors++
+            fatalContainers = append(fatalContainers, name)
             s.logger.Errorf("Fatal error updating %s: %v", name, err)
             continue
         }
@@ -193,7 +196,7 @@ func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []str
     for _, r := range results {
         if r.Success {
             updated++
-            s.logger.Infof("✓ %s: %s → %s", 
+            s.logger.Infof("✓ %s: %s → %s",
                 r.ContainerName, r.OldImage.String(), r.NewImage.String())
             updatedContainers = append(updatedContainers, r.ContainerName)
         } else if r.Error != nil {
@@ -206,24 +209,26 @@ func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []str
         }
     }
 
-    s.logger.Infof("Summary: %d updated, %d skipped, %d failed", 
-        updated, skipped, failed)
+    totalFailed := failed + fatalErrors
+    s.logger.Infof("Summary: %d updated, %d skipped, %d failed",
+        updated, skipped, totalFailed)
 
     // Envoyer une notification unique avec le résumé
-    if opts.Notify && !opts.DryRun && (updated > 0 || failed > 0) {
+    if opts.Notify && !opts.DryRun && (updated > 0 || totalFailed > 0) {
         notifTitle := fmt.Sprintf("Scheduled Updates Completed (%d/%d)",
             updated, len(containers))
-        
+
         var parts []string
         if len(updatedContainers) > 0 {
             parts = append(parts, strings.Join(updatedContainers, ", "))
         }
-        if len(failedContainers) > 0 {
-            parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(failedContainers, ", ")))
+        allFailed := append(failedContainers, fatalContainers...)
+        if len(allFailed) > 0 {
+            parts = append(parts, fmt.Sprintf("Failed: %s", strings.Join(allFailed, ", ")))
         }
 
-        notifMsg := fmt.Sprintf("%d updated, %d skipped, %d failed.", 
-        updated, skipped, failed) + "\nUpdated: " + strings.Join(parts, "\n")
+        notifMsg := fmt.Sprintf("%d updated, %d skipped, %d failed.",
+        updated, skipped, totalFailed) + "\nUpdated: " + strings.Join(parts, "\n")
 
         if err := s.manager.SendNotification(notifTitle, notifMsg); err != nil {
             s.logger.Warnf("Failed to send notification: %v", err)
@@ -234,19 +239,11 @@ func (s *Scheduler) performScheduledUpdate(ctx context.Context, containers []str
 // Stop arrête le scheduler
 func (s *Scheduler) Stop() {
     s.logger.Info("Stopping scheduler...")
-    
-    // Arrêter le cron
+
+    // Arrêter le cron et attendre la fin des jobs en cours
     ctx := s.cron.Stop()
-    
-    // Signaler l'arrêt à la goroutine de gestion des signaux
-    close(s.stopChan)
-    
-    // Attendre la fin de toutes les goroutines
-    s.wg.Wait()
-    
-    // Attendre la fin des jobs en cours
     <-ctx.Done()
-    
+
     s.logger.Info("Scheduler stopped")
 }
 

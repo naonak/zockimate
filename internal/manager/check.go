@@ -78,11 +78,6 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
     // Comparer les images
 	result.NeedsUpdate = false
 	if currentImage.IsExactReference() && latestImage.IsExactReference() {
-		// On devrait d'abord vérifier si les architectures correspondent
-		if currentImage.Platform != latestImage.Platform {
-			return result, fmt.Errorf("architecture mismatch: current=%s, latest=%s", 
-				currentImage.Platform, latestImage.Platform)
-		}
         // Si on a des références exactes, on peut comparer directement
         if currentImage.RepoDigest != "" && latestImage.RepoDigest != "" {
             result.NeedsUpdate = currentImage.RepoDigest != latestImage.RepoDigest
