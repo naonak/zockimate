@@ -1,6 +1,6 @@
 # Zockimate
 
-A Docker container manager with versioning capabilities, automated updates, and rollback features. Designed for **TrueNAS Scale** (ElectricEel-24.10.x), leveraging native ZFS integration for data snapshots.
+A Docker container manager with versioning capabilities, automated updates, and rollback features. Designed for **TrueNAS Scale** (24.10+), leveraging native ZFS integration for data snapshots.
 
 ## Features
 
