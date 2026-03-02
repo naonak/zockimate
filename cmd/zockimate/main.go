@@ -310,9 +310,8 @@ Examples:
                 }
             }
 
-            // Exit code 1 si des mises à jour sont disponibles
             if len(updates) > 0 {
-                return fmt.Errorf("updates available for: %s", strings.Join(updates, ", "))
+                cfg.Logger.Infof("Updates available for: %s", strings.Join(updates, ", "))
             }
         
             return nil
