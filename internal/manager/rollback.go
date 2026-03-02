@@ -67,14 +67,28 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
     result.SafetySnapshot = safetySnapshot.ID
 
     cm.lock.Lock()
-    defer cm.lock.Unlock()
     
+    // Gérer le déverrouillage proprement
+    var unlocked bool
+    defer func() {
+        if !unlocked {
+            cm.lock.Unlock()
+        }
+    }()
+    
+    // Fonction de récupération sans conflit de mutex
     defer func() {
         if result.Error != nil {
             cm.logger.Error("Rollback failed, attempting to restore from safety snapshot")
-            cm.lock.Unlock()
             
-            var err error // Déclarer err localement
+            // Déverrouiller avant l'appel récursif pour éviter le deadlock
+            if !unlocked {
+                cm.lock.Unlock()
+                unlocked = true
+            }
+            
+            // Appel récursif pour restaurer le snapshot de sécurité
+            var err error
             var safetyResult *types.RollbackResult
             safetyResult, err = cm.RollbackContainer(ctx, name, options.RollbackOptions{
                 SnapshotID: safetySnapshot.ID,
@@ -85,8 +99,9 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
             })
             
             if err != nil || !safetyResult.Success {
+                originalError := result.Error
                 result.Error = fmt.Errorf("failed to restore safety snapshot: %v (original error: %v)", 
-                    safetyResult.Error, result.Error)
+                    safetyResult.Error, originalError)
             }
         }
     }()
