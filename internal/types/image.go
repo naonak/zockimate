@@ -4,6 +4,8 @@ package types
 
 import (
     "fmt"
+
+    "zockimate/pkg/utils"
 )
 
 // ImageReference représente une référence complète à une image Docker
@@ -17,13 +19,14 @@ type ImageReference struct {
 
 // String retourne une représentation lisible de l'ImageReference
 func (ir *ImageReference) String() string {
+    shortID := utils.ShortenID(ir.ID)
     if ir.RepoDigest != "" {
-        return fmt.Sprintf("%s (%s)", ir.RepoDigest, ir.ID[:12])
+        return fmt.Sprintf("%s (%s)", ir.RepoDigest, shortID)
     }
     if ir.Tag != "" {
-        return fmt.Sprintf("%s (%s)", ir.Tag, ir.ID[:12])
+        return fmt.Sprintf("%s (%s)", ir.Tag, shortID)
     }
-    return ir.ID[:12]
+    return shortID
 }
 
 // BestReference retourne la meilleure référence disponible pour cette image

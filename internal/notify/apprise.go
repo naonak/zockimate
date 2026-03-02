@@ -2,21 +2,21 @@
 package notify
 
 import (
-    "fmt"
-    "time"
-    "net/http"
+    "bytes"
     "encoding/json"
-    "github.com/sirupsen/logrus"
-    "zockimate/internal/types"
+    "fmt"
+    "io"
+    "net/http"
     "net/url"
     "strconv"
-    "io"
     "strings"
-    "bytes"
+    "time"
 
+    "github.com/sirupsen/logrus"
+
+    "zockimate/internal/types"
 )
 
-// Types de notification
 const (
     // Types de notification
     NotificationInfo     = "info"
@@ -42,27 +42,25 @@ type Notification struct {
 }
 
 type AppriseClient struct {
-    url             string
-    tags            []string
-    format          string     // text/markdown/html
-    type_           string     // info/success/warning/error
-    title           string     // Titre par défaut
-    body_format     string     // notification body format template
-    overflow        string     // truncate/split
-    maxLength       int        // max length for messages
-    interpret_emoji bool       // interpréter les émojis
-    httpClient      *http.Client
-    logger          *logrus.Logger
+    url            string
+    tags           []string
+    format         string // text/markdown/html
+    notifType      string // info/success/warning/error
+    title          string // Titre par défaut
+    overflow       string // truncate/split
+    maxLength      int    // max length for messages
+    interpretEmoji bool   // interpréter les émojis
+    httpClient     *http.Client
+    logger         *logrus.Logger
 }
 
 type AppriseOptions struct {
-    Format         string   // Format du message (text/markdown/html)
-    Type           string   // Type de notification (info/success/warning/error)
-    Title          string   // Titre par défaut
-    BodyFormat     string   // Template pour le corps du message
-    Overflow       string   // Gestion du dépassement (truncate/split)
-    MaxLength      int      // Longueur max des messages
-    InterpretEmoji bool     // Interpréter les émojis
+    Format         string // Format du message (text/markdown/html)
+    Type           string // Type de notification (info/success/warning/error)
+    Title          string // Titre par défaut
+    Overflow       string // Gestion du dépassement (truncate/split)
+    MaxLength      int    // Longueur max des messages
+    InterpretEmoji bool   // Interpréter les émojis
 }
 
 func NewAppriseClient(appriseURL string, logger *logrus.Logger, opts AppriseOptions) (*AppriseClient, error) {
@@ -105,9 +103,9 @@ func NewAppriseClient(appriseURL string, logger *logrus.Logger, opts AppriseOpti
     }
 
     // Type par défaut si non spécifié
-    type_ := opts.Type
-    if type_ == "" {
-        type_ = NotificationInfo
+    notifType := opts.Type
+    if notifType == "" {
+        notifType = NotificationInfo
     }
 
     // Format par défaut
@@ -119,15 +117,14 @@ func NewAppriseClient(appriseURL string, logger *logrus.Logger, opts AppriseOpti
     u.RawQuery = query.Encode()
 
     return &AppriseClient{
-        url:             u.String(),
-        tags:            tags,
-        format:          format,
-        type_:          type_,
+        url:            u.String(),
+        tags:           tags,
+        format:         format,
+        notifType:      notifType,
         title:          opts.Title,
-        body_format:     opts.BodyFormat,
         overflow:       opts.Overflow,
         maxLength:      opts.MaxLength,
-        interpret_emoji: opts.InterpretEmoji,
+        interpretEmoji: opts.InterpretEmoji,
         httpClient: &http.Client{
             Timeout: 10 * time.Second,
         },
@@ -135,7 +132,6 @@ func NewAppriseClient(appriseURL string, logger *logrus.Logger, opts AppriseOpti
     }, nil
 }
 
-// Ajouter la méthode SendNotification et helper
 func (a *AppriseClient) sendNotification(notification Notification) error {
     a.logger.Debugf("Sending notification: %s", notification.Title)
 
@@ -146,7 +142,7 @@ func (a *AppriseClient) sendNotification(notification Notification) error {
 
     // Appliquer le type par défaut si non spécifié
     if notification.Type == "" {
-        notification.Type = a.type_
+        notification.Type = a.notifType
     }
 
     jsonData, err := json.Marshal(notification)
@@ -165,7 +161,7 @@ func (a *AppriseClient) sendNotification(notification Notification) error {
     if a.maxLength > 0 {
         query.Set("maxLength", strconv.Itoa(a.maxLength))
     }
-    if a.interpret_emoji {
+    if a.interpretEmoji {
         query.Set("interpret_emoji", "true")
     }
 
@@ -216,7 +212,6 @@ func (a *AppriseClient) SendNotification(title, message string, tags []string) e
     })
 }
 
-// Mettre à jour les autres méthodes pour utiliser sendNotification
 func (a *AppriseClient) NotifyUpdateAvailable(container string, currentImg, newImg *types.ImageReference) error {
     return a.sendNotification(Notification{
         Title: "Container Update Available",
@@ -259,7 +254,7 @@ func mergeTags(baseTags []string, additionalTags []string) []string {
         return baseTags
     }
 
-    // Utiliser une map pour dédédupliquer
+    // Utiliser une map pour dédupliquer
     allTags := make(map[string]struct{})
     for _, tag := range baseTags {
         allTags[tag] = struct{}{}

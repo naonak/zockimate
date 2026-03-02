@@ -43,15 +43,15 @@ func NewContainerManager(cfg *config.Config) (*ContainerManager, error) {
         return nil, fmt.Errorf("failed to create Docker client: %w", err)
     }
 
+    // Initialiser le gestionnaire ZFS
+    zfsManager := zfs.NewZFSManager(logger)
+
     // Initialiser la base de données
-    db, err := database.NewDatabase(cfg.DbPath, logger)
+    db, err := database.NewDatabase(cfg.DbPath, zfsManager, logger)
     if err != nil {
         dockerClient.Close()
         return nil, fmt.Errorf("failed to initialize database: %w", err)
     }
-
-    // Initialiser le gestionnaire ZFS
-    zfsManager := zfs.NewZFSManager(logger)
 
     // Initialiser le client Apprise si configuré
     var notifier *notify.AppriseClient

@@ -2,11 +2,8 @@ package manager
 
 import (
     "context"
-    "encoding/json"
     "fmt"
 
-    "github.com/docker/docker/api/types/container"
-    "github.com/docker/docker/api/types/network"
     "github.com/docker/docker/client"
 
     "zockimate/internal/types"
@@ -14,7 +11,6 @@ import (
     "zockimate/pkg/utils"
 )
 
-// internal/manager/rollback.go
 func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, opts options.RollbackOptions) (*types.RollbackResult, error) {
     result := &types.RollbackResult{
         ContainerName:   name,
@@ -107,22 +103,9 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
         }
     }()
 
-    var config container.Config
-    var hostConfig container.HostConfig
-    var networkConfig network.NetworkingConfig
-
-    if err := json.Unmarshal(snapshot.Config, &config); err != nil {
-        result.Error = fmt.Errorf("failed to unmarshal config: %w", err)
-        return result, result.Error
-    }
-
-    if err := json.Unmarshal(snapshot.HostConfig, &hostConfig); err != nil {
-        result.Error = fmt.Errorf("failed to unmarshal host config: %w", err)
-        return result, result.Error
-    }
-
-    if err := json.Unmarshal(snapshot.NetworkConfig, &networkConfig); err != nil {
-        result.Error = fmt.Errorf("failed to unmarshal network config: %w", err)
+    config, hostConfig, networkConfig, err := cm.docker.UnmarshalConfigs(snapshot.Config, snapshot.HostConfig, snapshot.NetworkConfig)
+    if err != nil {
+        result.Error = fmt.Errorf("failed to unmarshal configs: %w", err)
         return result, result.Error
     }
 
@@ -170,7 +153,7 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
     
     // Recréer le conteneur avec les pointeurs corrects
     containerModified = true
-    if err := cm.docker.RecreateContainer(ctx, name, &config, &hostConfig, &networkConfig); err != nil {
+    if err := cm.docker.RecreateContainer(ctx, name, config, hostConfig, networkConfig); err != nil {
         result.Error = fmt.Errorf("failed to recreate container: %w", err)
         return result, result.Error
     }
@@ -188,13 +171,11 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
 
     cm.logger.Debugf("Successfully rolled back container %s to snapshot %d", name, snapshot.ID)
 
-    if cm.notify != nil {
-        cm.notifyf(
-            "Rollback Successful",
-            "Container %s successfully rolled back to snapshot %d (Image: %s)",
-            name, snapshot.ID, snapshot.ImageRef.String(),
-        )
-    }
+    cm.notifyf(
+        "Rollback Successful",
+        "Container %s successfully rolled back to snapshot %d (Image: %s)",
+        name, snapshot.ID, snapshot.ImageRef.String(),
+    )
 
     return result, nil
 }

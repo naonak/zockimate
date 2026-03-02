@@ -2,11 +2,10 @@
 package utils
 
 import (
-    "context"
-    "encoding/json"
     "fmt"
     "strings"
     "time"
+
     "github.com/sirupsen/logrus"
 )
 
@@ -41,18 +40,6 @@ func GetTimeout(labels map[string]string, defaultTimeout time.Duration, logger *
     return defaultTimeout
 }
 
-// JSON helpers
-// -----------
-
-// PrettyJSON retourne une représentation JSON indentée
-func PrettyJSON(v interface{}) string {
-    b, err := json.MarshalIndent(v, "", "  ")
-    if err != nil {
-        return fmt.Sprintf("error marshaling JSON: %v", err)
-    }
-    return string(b)
-}
-
 // Docker Label helpers
 // ------------------
 
@@ -65,47 +52,6 @@ func IsContainerEnabled(labels map[string]string) bool {
 // GetZFSDataset récupère le dataset ZFS configuré pour un conteneur
 func GetZFSDataset(labels map[string]string) string {
     return labels["zockimate.zfs_dataset"]
-}
-
-// Retry helpers
-// ------------
-
-// RetryOptions définit les options pour la fonction Retry
-type RetryOptions struct {
-    MaxAttempts int
-    Delay       time.Duration
-    OnRetry     func(attempt int, err error)
-}
-
-// Retry exécute une fonction avec retry
-func Retry(ctx context.Context, fn func() error, opts RetryOptions) error {
-    if opts.MaxAttempts == 0 {
-        opts.MaxAttempts = 3
-    }
-    if opts.Delay == 0 {
-        opts.Delay = time.Second * 5
-    }
-
-    var lastErr error
-    for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
-        select {
-        case <-ctx.Done():
-            return ctx.Err()
-        default:
-            if err := fn(); err == nil {
-                return nil
-            } else {
-                lastErr = err
-                if opts.OnRetry != nil {
-                    opts.OnRetry(attempt, err)
-                }
-                if attempt < opts.MaxAttempts {
-                    time.Sleep(opts.Delay)
-                }
-            }
-        }
-    }
-    return fmt.Errorf("failed after %d attempts: %w", opts.MaxAttempts, lastErr)
 }
 
 // ParseTime essaie de parser une chaîne de date avec différents formats

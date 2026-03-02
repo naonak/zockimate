@@ -19,13 +19,13 @@ import (
 
 // Database gère les opérations de base de données
 type Database struct {
-    db      *sql.DB
-    zfs     *zfs.ZFSManager  // Ajouter ce champ
-    logger  *logrus.Logger
+    db     *sql.DB
+    zfs    *zfs.ZFSManager
+    logger *logrus.Logger
 }
 
 // NewDatabase initialise une nouvelle instance de base de données
-func NewDatabase(dbPath string, logger *logrus.Logger) (*Database, error) {
+func NewDatabase(dbPath string, zfsManager *zfs.ZFSManager, logger *logrus.Logger) (*Database, error) {
     // Créer le répertoire si nécessaire
     if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
         return nil, fmt.Errorf("failed to create database directory: %w", err)
@@ -44,7 +44,7 @@ func NewDatabase(dbPath string, logger *logrus.Logger) (*Database, error) {
 
     return &Database{
         db:     db,
-        zfs:    zfs.NewZFSManager(logger),  // Initialiser le ZFS manager
+        zfs:    zfsManager,
         logger: logger,
     }, nil
 }

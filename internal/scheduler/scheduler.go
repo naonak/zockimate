@@ -75,6 +75,15 @@ func (s *Scheduler) Start(cronExpr string) error {
     // Démarrer le cron
     s.cron.Start()
 
+    // Afficher la prochaine exécution
+    if next := s.NextRun(); next != nil {
+        mode := "update"
+        if s.checkOnly {
+            mode = "check"
+        }
+        s.logger.Infof("First %s scheduled at: %s", mode, next.Format("2006-01-02 15:04:05"))
+    }
+
     // Gérer les signaux d'arrêt
     sigChan := make(chan os.Signal, 1)
     signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

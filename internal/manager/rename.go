@@ -1,17 +1,16 @@
-// internal/manager/check.go
 package manager
 
 import (
     "context"
     "fmt"
 
-    "zockimate/pkg/utils"
-    "zockimate/internal/types/options"
     "github.com/docker/docker/client"
+
     "zockimate/internal/types"
+    "zockimate/internal/types/options"
+    "zockimate/pkg/utils"
 )
 
-// internal/manager/rename.go
 func (cm *ContainerManager) RenameContainer(ctx context.Context, oldName, newName string, opts options.RenameOptions) (*types.RenameResult, error) {
     cm.lock.Lock()
     defer cm.lock.Unlock()

@@ -2,18 +2,14 @@
 package manager
 
 import (
-
     "context"
-    "encoding/json"
     "fmt"
 
-    "github.com/docker/docker/api/types/container"
-    "github.com/docker/docker/api/types/network"
     "github.com/docker/docker/client"
 
-    "zockimate/pkg/utils"
     "zockimate/internal/types"
     "zockimate/internal/types/options"
+    "zockimate/pkg/utils"
 )
 
 func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, opts options.UpdateOptions) (*types.UpdateResult, error) {
@@ -94,19 +90,9 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
         return result, fmt.Errorf("failed to get container configurations: %w", err)
     }
 
-    var config container.Config
-    if err := json.Unmarshal(containerConfig, &config); err != nil {
-        return result, fmt.Errorf("failed to unmarshal config: %w", err)
-    }
-
-    var hostCfg container.HostConfig
-    if err := json.Unmarshal(hostConfig, &hostCfg); err != nil {
-        return result, fmt.Errorf("failed to unmarshal host config: %w", err)
-    }
-
-    var netConfig network.NetworkingConfig
-    if err := json.Unmarshal(networkConfig, &netConfig); err != nil {
-        return result, fmt.Errorf("failed to unmarshal network config: %w", err)
+    config, hostCfg, netConfig, err := cm.docker.UnmarshalConfigs(containerConfig, hostConfig, networkConfig)
+    if err != nil {
+        return result, fmt.Errorf("failed to unmarshal configs: %w", err)
     }
 
     // Préserver ou mettre à jour les labels importants
@@ -127,7 +113,7 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
 
     // Créer le nouveau conteneur
     cm.logger.Debugf("Creating new container with image: %s", config.Image)
-    if err := cm.docker.RecreateContainer(ctx, name, &config, &hostCfg, &netConfig); err != nil {
+    if err := cm.docker.RecreateContainer(ctx, name, config, hostCfg, netConfig); err != nil {
         return result, fmt.Errorf("failed to recreate container: %w", err)
     }    
 

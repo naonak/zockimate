@@ -53,18 +53,7 @@ func newScheduleUpdateCmd(cfg *config.Config) *cobra.Command {
 				Logger:     cfg.Logger,
 			})
 
-			if err := s.Start(cronExpr); err != nil {
-				return err
-			}
-
-			next := s.NextRun()
-			if next != nil {
-				cfg.Logger.Infof("First update scheduled at: %s",
-					next.Format("2006-01-02 15:04:05"))
-			}
-
-			// Attendre indéfiniment ou jusqu'à Ctrl+C
-			select {}
+			return s.Start(cronExpr)
 		},
 	}
 
@@ -102,18 +91,7 @@ func newScheduleCheckCmd(cfg *config.Config) *cobra.Command {
 				Logger:     cfg.Logger,
 			})
 
-			if err := s.Start(cronExpr); err != nil {
-				return err
-			}
-
-			next := s.NextRun()
-			if next != nil {
-				cfg.Logger.Infof("First check scheduled at: %s",
-					next.Format("2006-01-02 15:04:05"))
-			}
-
-			// Attendre indéfiniment ou jusqu'à Ctrl+C
-			select {}
+			return s.Start(cronExpr)
 		},
 	}
 

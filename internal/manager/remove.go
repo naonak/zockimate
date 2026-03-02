@@ -4,12 +4,11 @@ import (
     "context"
     "fmt"
 
-    "zockimate/pkg/utils"
     "zockimate/internal/types"
     "zockimate/internal/types/options"
+    "zockimate/pkg/utils"
 )
 
-// internal/manager/remove.go
 func (cm *ContainerManager) RemoveContainer(ctx context.Context, name string, opts options.RemoveOptions) (*types.RemoveResult, error) {
     cm.lock.Lock()
     defer cm.lock.Unlock()
