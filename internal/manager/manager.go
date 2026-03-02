@@ -164,7 +164,7 @@ func (cm *ContainerManager) CreateSnapshot(ctx context.Context, name string, opt
     if dataset := utils.GetZFSDataset(ctn.Config.Labels); dataset != "" {
         snapshot, err := cm.zfs.CreateSnapshot(dataset)
         if err != nil {
-            return nil, fmt.Errorf("failed to create ZFS snapshot: %w", err)
+            return nil, err
         }
         zfsSnapshot = snapshot
     }

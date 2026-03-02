@@ -5,6 +5,7 @@ import (
     "context"
     "fmt"
     "os/exec"
+    "strings"
     "time"
     "github.com/sirupsen/logrus"
 )
@@ -32,8 +33,8 @@ func (z *ZFSManager) CreateSnapshot(dataset string) (string, error) {
     defer cancel()
 
     cmd := exec.CommandContext(ctx, "zfs", "snapshot", snapshotName)
-    if err := cmd.Run(); err != nil {
-        return "", fmt.Errorf("failed to create ZFS snapshot: %w", err)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return "", fmt.Errorf("failed to create ZFS snapshot %s: %w: %s", snapshotName, err, strings.TrimSpace(string(out)))
     }
     
     z.logger.Debugf("Created ZFS snapshot: %s", snapshotName)
@@ -46,8 +47,8 @@ func (z *ZFSManager) RollbackSnapshot(snapshot string) error {
     defer cancel()
 
     cmd := exec.CommandContext(ctx, "zfs", "rollback", "-r", snapshot)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to rollback ZFS snapshot: %w", err)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return fmt.Errorf("failed to rollback ZFS snapshot %s: %w: %s", snapshot, err, strings.TrimSpace(string(out)))
     }
 
     z.logger.Debugf("Rolled back to ZFS snapshot: %s", snapshot)
@@ -60,8 +61,8 @@ func (z *ZFSManager) DeleteSnapshot(snapshot string) error {
     defer cancel()
 
     cmd := exec.CommandContext(ctx, "zfs", "destroy", snapshot)
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to delete ZFS snapshot: %w", err)
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return fmt.Errorf("failed to delete ZFS snapshot %s: %w: %s", snapshot, err, strings.TrimSpace(string(out)))
     }
 
     z.logger.Debugf("Deleted ZFS snapshot: %s", snapshot)
