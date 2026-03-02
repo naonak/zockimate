@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+._*
+**/.DS_Store
+**/._*
+
+# Build output
+/zockimate
+*.exe
+
+# IDE
+.vscode/
+.idea/

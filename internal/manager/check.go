@@ -14,9 +14,7 @@ import (
 // CheckContainer vérifie si une mise à jour est disponible pour un conteneur
 func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opts options.CheckOptions) (types.CheckResult, error) {
 
-    cm.lock.Lock()
-    defer cm.lock.Unlock()
-
+    // Pas de lock : opération lecture seule, PullImage peut durer plusieurs minutes
     result := types.CheckResult{}
     name = utils.CleanContainerName(name)
     cm.logger.Debugf("Starting check process for container: %s", name)
@@ -91,7 +89,7 @@ func (cm *ContainerManager) CheckContainer(ctx context.Context, name string, opt
 
     // Nettoyer l'image téléchargée si demandé
     if opts.Cleanup && result.NeedsUpdate {
-        cm.logger.Debugf("Starting cleanup image : %s", name)
+        cm.logger.Debugf("Starting cleanup image: %s", name)
         if err := cm.docker.RemoveImage(ctx, latestImage.ID); err != nil {
             cm.logger.Warnf("Failed to cleanup image %s: %v", latestImage.ID, err)
         }

@@ -181,9 +181,10 @@ func (a *AppriseClient) sendNotification(notification Notification) error {
 
     a.logger.Debugf("POST %s with data: %s", finalURL, string(jsonData))
 
-    // Utiliser finalURL au lieu de a.url pour la requête
     req, err := http.NewRequest("POST", finalURL, bytes.NewBuffer(jsonData))
-
+    if err != nil {
+        return fmt.Errorf("failed to create request: %w", err)
+    }
     req.Header.Set("Content-Type", "application/json")
 
     resp, err := a.httpClient.Do(req)
@@ -197,7 +198,7 @@ func (a *AppriseClient) sendNotification(notification Notification) error {
         return fmt.Errorf("failed to read response body: %w", err)
     }
 
-    if resp.StatusCode != http.StatusOK {
+    if resp.StatusCode < 200 || resp.StatusCode >= 300 {
         a.logger.Debugf("Notification failed with status %d: %s", resp.StatusCode, string(body))
         return fmt.Errorf("notification failed with status %d: %s", resp.StatusCode, string(body))
     }

@@ -249,7 +249,7 @@ func (s *Scheduler) Stop() {
 
 // IsRunning indique si le scheduler est en cours d'exécution
 func (s *Scheduler) IsRunning() bool {
-    return s.cron.Entries() != nil
+    return len(s.cron.Entries()) > 0
 }
 
 // NextRun retourne la prochaine exécution prévue

@@ -276,10 +276,10 @@ func (d *Database) GetHistory(opts options.HistoryOptions) ([]types.SnapshotMeta
 // CleanupSnapshots nettoie les anciens snapshots
 func (d *Database) CleanupSnapshots(containerName string, retain int) error {
     rows, err := d.db.Query(`
-        SELECT id, zfs_snapshot 
-        FROM container_snapshots 
-        WHERE container_name = ? 
-        ORDER BY created_at DESC 
+        SELECT id, zfs_snapshot
+        FROM container_snapshots
+        WHERE container_name = ?
+        ORDER BY created_at DESC
         LIMIT -1 OFFSET ?`,
         containerName, retain,
     )
@@ -288,27 +288,52 @@ func (d *Database) CleanupSnapshots(containerName string, retain int) error {
     }
     defer rows.Close()
 
+    type entry struct {
+        id          int64
+        zfsSnapshot string
+    }
+    var toDelete []entry
+
     for rows.Next() {
         var id int64
         var zfsSnapshot sql.NullString
         if err := rows.Scan(&id, &zfsSnapshot); err != nil {
             return fmt.Errorf("failed to scan snapshot row: %w", err)
         }
-
-        // Supprimer le snapshot ZFS si présent
-        if zfsSnapshot.Valid && zfsSnapshot.String != "" {
-            if err := d.zfs.DeleteSnapshot(zfsSnapshot.String); err != nil {
-                d.logger.Warnf("Failed to delete ZFS snapshot %s: %v", 
-                    zfsSnapshot.String, err)
-            }
+        e := entry{id: id}
+        if zfsSnapshot.Valid {
+            e.zfsSnapshot = zfsSnapshot.String
         }
+        toDelete = append(toDelete, e)
+    }
+    if err := rows.Err(); err != nil {
+        return fmt.Errorf("failed to iterate snapshots: %w", err)
+    }
+    rows.Close()
 
-        // Supprimer l'entrée de la base
-        if _, err := d.db.Exec(
-            "DELETE FROM container_snapshots WHERE id = ?", 
-            id,
-        ); err != nil {
-            return fmt.Errorf("failed to delete snapshot %d: %w", id, err)
+    // Supprimer les entrées DB dans une transaction
+    tx, err := d.db.Begin()
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback() //nolint:errcheck
+
+    for _, e := range toDelete {
+        if _, err := tx.Exec("DELETE FROM container_snapshots WHERE id = ?", e.id); err != nil {
+            return fmt.Errorf("failed to delete snapshot %d: %w", e.id, err)
+        }
+    }
+
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("failed to commit snapshot cleanup: %w", err)
+    }
+
+    // Supprimer les snapshots ZFS après succès de la transaction DB
+    for _, e := range toDelete {
+        if e.zfsSnapshot != "" {
+            if err := d.zfs.DeleteSnapshot(e.zfsSnapshot); err != nil {
+                d.logger.Warnf("Failed to delete ZFS snapshot %s: %v", e.zfsSnapshot, err)
+            }
         }
     }
 
@@ -339,7 +364,7 @@ func (d *Database) RemoveEntries(containerName string, opts options.RemoveOption
     var conditions []string
     var args []interface{}
 
-    query := "DELETE FROM container_snapshots WHERE container_name = ?"
+    conditions = append(conditions, "container_name = ?")
     args = append(args, containerName)
 
     if !opts.All {
@@ -353,14 +378,12 @@ func (d *Database) RemoveEntries(containerName string, opts options.RemoveOption
         }
     }
 
-    if len(conditions) > 0 {
-        query += " AND " + strings.Join(conditions, " AND ")
-    }
+    whereClause := strings.Join(conditions, " AND ")
 
-    // Si ZFS activé, d'abord récupérer les snapshots à supprimer
+    // Si ZFS activé, récupérer les snapshots à supprimer avant de supprimer les entrées
+    var zfsSnapshots []string
     if opts.Zfs {
-        var snapshots []string
-        rows, err := d.db.Query("SELECT zfs_snapshot FROM container_snapshots WHERE "+query, args...)
+        rows, err := d.db.Query("SELECT zfs_snapshot FROM container_snapshots WHERE "+whereClause, args...)
         if err != nil {
             return 0, fmt.Errorf("failed to query ZFS snapshots: %w", err)
         }
@@ -372,22 +395,26 @@ func (d *Database) RemoveEntries(containerName string, opts options.RemoveOption
                 return 0, fmt.Errorf("failed to scan snapshot: %w", err)
             }
             if snapshot != "" {
-                snapshots = append(snapshots, snapshot)
+                zfsSnapshots = append(zfsSnapshots, snapshot)
             }
         }
-
-        // Supprimer les snapshots ZFS
-        for _, snapshot := range snapshots {
-            if err := d.zfs.DeleteSnapshot(snapshot); err != nil {
-                d.logger.Warnf("Failed to delete ZFS snapshot %s: %v", snapshot, err)
-            }
+        if err := rows.Err(); err != nil {
+            return 0, fmt.Errorf("failed to iterate ZFS snapshots: %w", err)
         }
+        rows.Close()
     }
 
-    // Supprimer les entrées
-    result, err := d.db.Exec(query, args...)
+    // Supprimer les entrées DB
+    result, err := d.db.Exec("DELETE FROM container_snapshots WHERE "+whereClause, args...)
     if err != nil {
         return 0, fmt.Errorf("failed to delete entries: %w", err)
+    }
+
+    // Supprimer les snapshots ZFS après succès de la suppression DB
+    for _, snapshot := range zfsSnapshots {
+        if err := d.zfs.DeleteSnapshot(snapshot); err != nil {
+            d.logger.Warnf("Failed to delete ZFS snapshot %s: %v", snapshot, err)
+        }
     }
 
     return result.RowsAffected()

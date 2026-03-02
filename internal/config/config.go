@@ -131,16 +131,29 @@ func (c *Config) Validate() error {
         return fmt.Errorf("timeout must be at least 1 second")
     }
 
+    // Vérifier limit
+    if c.Limit < 0 {
+        return fmt.Errorf("limit cannot be negative")
+    }
+
     // Vérifier les dates si spécifiées
+    var since, before time.Time
     if c.Since != "" {
-        if _, err := time.Parse("2006-01-02", c.Since); err != nil {
+        var err error
+        since, err = time.Parse("2006-01-02", c.Since)
+        if err != nil {
             return fmt.Errorf("invalid since date format (use YYYY-MM-DD): %w", err)
         }
     }
     if c.Before != "" {
-        if _, err := time.Parse("2006-01-02", c.Before); err != nil {
+        var err error
+        before, err = time.Parse("2006-01-02", c.Before)
+        if err != nil {
             return fmt.Errorf("invalid before date format (use YYYY-MM-DD): %w", err)
         }
+    }
+    if !since.IsZero() && !before.IsZero() && since.After(before) {
+        return fmt.Errorf("since date must be before (or equal to) before date")
     }
 
     // Vérifier le critère de tri

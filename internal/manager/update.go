@@ -132,7 +132,7 @@ func (cm *ContainerManager) UpdateContainer(ctx context.Context, name string, op
     }    
 
     // Attendre que le conteneur soit prêt
-    timeout := utils.GetTimeout(ctn.Config.Labels, opts.Timeout)
+    timeout := utils.GetTimeout(ctn.Config.Labels, opts.Timeout, cm.logger)
     cm.logger.Debugf("Waiting for container %s to be ready (timeout: %s)", name, timeout)
     
     // Modifier la gestion des erreurs pour WaitForContainer

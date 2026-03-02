@@ -25,7 +25,7 @@ func ShortenID(id string) string {
 // -----------
 
 // GetTimeout récupère un timeout depuis un label avec valeur par défaut
-func GetTimeout(labels map[string]string, defaultTimeout time.Duration) time.Duration {
+func GetTimeout(labels map[string]string, defaultTimeout time.Duration, logger *logrus.Logger) time.Duration {
     if timeout, ok := labels["zockimate.timeout"]; ok {
         // Parser le timeout depuis le label
         if d, err := time.ParseDuration(timeout); err == nil {
@@ -33,9 +33,9 @@ func GetTimeout(labels map[string]string, defaultTimeout time.Duration) time.Dur
             if d > 0 && d <= 24*time.Hour {
                 return d
             }
-            logrus.Warnf("Invalid timeout value in label: %s, using default", timeout)
+            logger.Warnf("Invalid timeout value in label: %s, using default", timeout)
         } else {
-            logrus.Warnf("Failed to parse timeout from label: %s, using default", timeout)
+            logger.Warnf("Failed to parse timeout from label: %s, using default", timeout)
         }
     }
     return defaultTimeout

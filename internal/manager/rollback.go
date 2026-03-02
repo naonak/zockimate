@@ -173,7 +173,7 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
     }
     
     // Attendre que le conteneur soit prêt
-    timeout := utils.GetTimeout(config.Labels, opts.Timeout)
+    timeout := utils.GetTimeout(config.Labels, opts.Timeout, cm.logger)
     cm.logger.Debugf("Waiting for container %s to be ready (timeout: %s)", name, timeout)
 
     if err := cm.docker.WaitForContainer(ctx, name, timeout); err != nil {
