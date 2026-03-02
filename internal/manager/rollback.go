@@ -76,31 +76,32 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
         }
     }()
     
-    // Fonction de récupération sans conflit de mutex
+    // Flag pour savoir si le conteneur a été modifié (ZFS rollback ou recreate)
+    var containerModified bool
+
+    // Fonction de récupération : ne restaurer que si le conteneur a été modifié
     defer func() {
-        if result.Error != nil {
-            cm.logger.Error("Rollback failed, attempting to restore from safety snapshot")
-            
+        if result.Error != nil && containerModified {
+            cm.logger.Error("Rollback failed after container modification, attempting to restore from safety snapshot")
+
             // Déverrouiller avant l'appel récursif pour éviter le deadlock
             if !unlocked {
                 cm.lock.Unlock()
                 unlocked = true
             }
-            
+
             // Appel récursif pour restaurer le snapshot de sécurité
-            var err error
-            var safetyResult *types.RollbackResult
-            safetyResult, err = cm.RollbackContainer(ctx, name, options.RollbackOptions{
+            safetyResult, err := cm.RollbackContainer(ctx, name, options.RollbackOptions{
                 SnapshotID: safetySnapshot.ID,
                 Image:     true,
                 Data:      true,
                 Config:    true,
                 Force:     true,
             })
-            
+
             if err != nil || !safetyResult.Success {
                 originalError := result.Error
-                result.Error = fmt.Errorf("failed to restore safety snapshot: %v (original error: %v)", 
+                result.Error = fmt.Errorf("failed to restore safety snapshot: %v (original error: %v)",
                     safetyResult.Error, originalError)
             }
         }
@@ -160,6 +161,7 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
 
     // Restaurer les données si demandé
     if opts.Data && snapshot.ZFSSnapshot != "" {
+        containerModified = true
         if err := cm.zfs.RollbackSnapshot(snapshot.ZFSSnapshot); err != nil {
             result.Error = fmt.Errorf("failed to rollback ZFS snapshot: %w", err)
             return result, result.Error
@@ -167,6 +169,7 @@ func (cm *ContainerManager) RollbackContainer(ctx context.Context, name string, 
     }
     
     // Recréer le conteneur avec les pointeurs corrects
+    containerModified = true
     if err := cm.docker.RecreateContainer(ctx, name, &config, &hostConfig, &networkConfig); err != nil {
         result.Error = fmt.Errorf("failed to recreate container: %w", err)
         return result, result.Error

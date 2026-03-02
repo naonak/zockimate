@@ -370,11 +370,11 @@ func (d *Database) RemoveEntries(containerName string, opts options.RemoveOption
     if !opts.All {
         if !opts.Before.IsZero() {
             conditions = append(conditions, "created_at < ?")
-            args = append(args, opts.Before.Format("2006-01-02"))
+            args = append(args, opts.Before.Format(time.RFC3339))
         }
         if opts.OlderThan > 0 {
             conditions = append(conditions, "created_at < ?")
-            args = append(args, time.Now().Add(-opts.OlderThan).Format("2006-01-02"))
+            args = append(args, time.Now().Add(-opts.OlderThan).UTC().Format(time.RFC3339))
         }
     }
 

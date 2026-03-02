@@ -8,6 +8,14 @@
 /zockimate
 *.exe
 
+# Data & secrets
+*.db
+.env
+.env.*
+
+# Logs
+*.log
+
 # IDE
 .vscode/
 .idea/
